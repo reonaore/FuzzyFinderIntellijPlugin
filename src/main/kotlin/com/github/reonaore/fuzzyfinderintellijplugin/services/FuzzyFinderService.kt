@@ -1,9 +1,12 @@
 package com.github.reonaore.fuzzyfinderintellijplugin.services
 
+import com.github.reonaore.fuzzyfinderintellijplugin.settings.FuzzyFinderSettingsService
+import com.github.reonaore.fuzzyfinderintellijplugin.settings.SupportedCommand
 import com.github.reonaore.fuzzyfinderintellijplugin.util.FuzzyFinderParsers
 import com.intellij.execution.configurations.GeneralCommandLine
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.project.Project
 import java.io.IOException
@@ -17,6 +20,8 @@ import java.util.concurrent.TimeUnit
 class FuzzyFinderService(private val project: Project) {
 
     private val cachedCandidates = ConcurrentHashMap<FdSearchOptions, List<Path>>()
+    private val settingsService: FuzzyFinderSettingsService
+        get() = ApplicationManager.getApplication().getService(FuzzyFinderSettingsService::class.java)
 
     fun ensureCandidates(options: FdSearchOptions): List<Path> {
         return cachedCandidates.computeIfAbsent(options, ::discoverCandidates)
@@ -28,7 +33,7 @@ class FuzzyFinderService(private val project: Project) {
             candidates.take(limit)
         } else {
             val stdout = runProcess(
-                GeneralCommandLine("fzf")
+                GeneralCommandLine(settingsService.executablePath(SupportedCommand.FZF))
                     .withParentEnvironmentType(GeneralCommandLine.ParentEnvironmentType.CONSOLE)
                     .withParameters("--filter", query, "--scheme=path", "--read0", "--print0"),
                 stdin = FuzzyFinderParsers.toNulSeparatedBytes(candidates),
@@ -54,7 +59,7 @@ class FuzzyFinderService(private val project: Project) {
             ?: throw FuzzyFinderException("Project root is unavailable.")
 
         val stdout = runProcess(
-            GeneralCommandLine("fd")
+            GeneralCommandLine(settingsService.executablePath(SupportedCommand.FD))
                 .withParentEnvironmentType(GeneralCommandLine.ParentEnvironmentType.CONSOLE)
                 .withParameters(buildFdParameters(options, root.toString())),
         )

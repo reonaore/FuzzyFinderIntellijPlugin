@@ -1,5 +1,8 @@
 package com.github.reonaore.fuzzyfinderintellijplugin
 
+import com.github.reonaore.fuzzyfinderintellijplugin.settings.FuzzyFinderSettingsState
+import com.github.reonaore.fuzzyfinderintellijplugin.settings.FuzzyFinderSettingsService
+import com.github.reonaore.fuzzyfinderintellijplugin.settings.SupportedCommand
 import com.github.reonaore.fuzzyfinderintellijplugin.services.FdEntryType
 import com.github.reonaore.fuzzyfinderintellijplugin.services.FdSearchOptions
 import com.github.reonaore.fuzzyfinderintellijplugin.services.buildFdParameters
@@ -56,5 +59,20 @@ class FuzzyFinderParsersTest {
             ),
             parameters,
         )
+    }
+
+    @org.junit.Test
+    fun usesConfiguredExecutablePathWhenPresent() {
+        val settings = FuzzyFinderSettingsService()
+        settings.loadState(FuzzyFinderSettingsState(fdExecutablePath = "/opt/homebrew/bin/fd"))
+
+        assertEquals("/opt/homebrew/bin/fd", settings.executablePath(SupportedCommand.FD))
+    }
+
+    @org.junit.Test
+    fun fallsBackToDefaultExecutableWhenBlank() {
+        val settings = FuzzyFinderSettingsService()
+
+        assertEquals("fzf", settings.executablePath(SupportedCommand.FZF))
     }
 }

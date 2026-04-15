@@ -10,6 +10,11 @@
 
     <extensions defaultExtensionNs="com.intellij">
         <notificationGroup id="Fuzzy Finder Notifications" displayType="BALLOON" />
+        <applicationConfigurable
+                parentId="tools"
+                instance="com.github.reonaore.fuzzyfinderintellijplugin.settings.FuzzyFinderSettingsConfigurable"
+                id="com.github.reonaore.fuzzyfinderintellijplugin.settings"
+                displayName="Fuzzy Finder" />
     </extensions>
 
     <actions>
