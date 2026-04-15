@@ -23,6 +23,14 @@ import com.intellij.ui.ScrollPaneFactory
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBList
 import com.intellij.ui.components.JBTextField
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import java.awt.BorderLayout
 import java.awt.Dimension
 import java.awt.event.ActionEvent
@@ -30,7 +38,6 @@ import java.awt.event.KeyEvent
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import java.nio.file.Path
-import java.util.concurrent.atomic.AtomicInteger
 import javax.swing.AbstractAction
 import javax.swing.Action
 import javax.swing.DefaultListCellRenderer
@@ -42,6 +49,7 @@ import javax.swing.ListSelectionModel
 import javax.swing.SwingUtilities
 import javax.swing.Timer
 import javax.swing.event.ListSelectionEvent
+import kotlin.coroutines.resume
 
 class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, false) {
 
@@ -54,8 +62,9 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
     private val resultList = JBList(resultModel)
     private val previewDocument: Document = EditorFactory.getInstance().createDocument(PREVIEW_EMPTY)
     private val previewEditor = EditorFactory.getInstance().createViewer(previewDocument, project) as EditorEx
-    private val requestId = AtomicInteger()
+    private val dialogScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val streamedCandidates = mutableListOf<Path>()
+    private var searchJob: Job? = null
     private val searchTimer = Timer(SEARCH_DEBOUNCE_MS) { triggerSearch() }
 
     init {
@@ -91,6 +100,7 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
     override fun createActions(): Array<Action> = arrayOf(okAction, cancelAction)
 
     override fun dispose() {
+        dialogScope.cancel()
         EditorFactory.getInstance().releaseEditor(previewEditor)
         super.dispose()
     }
@@ -203,24 +213,25 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
     private fun triggerSearch() {
         val query = searchField.text
         val options = optionsPanel.currentOptions()
-        val currentRequest = requestId.incrementAndGet()
         val cachedCandidates = service.getCachedCandidates(options)
+        searchJob?.cancel()
 
         if (query.isBlank() && cachedCandidates == null) {
-            startStreamingLoad(currentRequest, options)
+            startStreamingLoad(options)
             return
         }
 
         statusLabel.text = STATUS_SEARCHING
 
-        ApplicationManager.getApplication().executeOnPooledThread {
+        searchJob = dialogScope.launch {
             try {
                 val searchResult = service.search(query, options)
-                onMatchingRequest(currentRequest) {
+                onEdt {
                     applySearchResult(searchResult)
                 }
+            } catch (_: CancellationException) {
             } catch (error: FuzzyFinderException) {
-                onMatchingRequest(currentRequest) {
+                onEdt {
                     statusLabel.text = STATUS_ERROR
                     service.notifyError(error.message ?: STATUS_ERROR)
                 }
@@ -228,42 +239,36 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
         }
     }
 
-    private fun startStreamingLoad(currentRequest: Int, options: FdSearchOptions) {
+    private fun startStreamingLoad(options: FdSearchOptions) {
         streamedCandidates.clear()
         updateResults(emptyList())
         statusLabel.text = STATUS_LOADING
 
-        ApplicationManager.getApplication().executeOnPooledThread {
+        searchJob = dialogScope.launch {
             try {
                 val candidates = service.streamCandidates(options) { batch, total ->
-                    onMatchingRequest(currentRequest) {
-                        if (searchField.text.isNotBlank()) return@onMatchingRequest
+                    onEdt {
+                        if (searchField.text.isNotBlank()) return@onEdt
                         streamedCandidates += batch
                         updateResults(streamedCandidates.take(INITIAL_RESULT_LIMIT))
                         statusLabel.text = "Loading files... $total found"
                     }
                 }
 
-                onMatchingRequest(currentRequest) {
+                onEdt {
                     if (searchField.text.isBlank()) {
                         applySearchResult(SearchResult(candidates.size, candidates.take(INITIAL_RESULT_LIMIT)))
                     } else {
                         triggerSearch()
                     }
                 }
+            } catch (_: CancellationException) {
             } catch (error: FuzzyFinderException) {
-                onMatchingRequest(currentRequest) {
+                onEdt {
                     statusLabel.text = STATUS_ERROR
                     service.notifyError(error.message ?: STATUS_ERROR)
                 }
             }
-        }
-    }
-
-    private fun onMatchingRequest(request: Int, action: () -> Unit) {
-        SwingUtilities.invokeLater {
-            if (request != requestId.get()) return@invokeLater
-            action()
         }
     }
 
@@ -314,6 +319,16 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
         val virtualFile = LocalFileSystem.getInstance().findFileByNioFile(selected) ?: return null
         if (virtualFile.isDirectory) return null
         return virtualFile
+    }
+
+    private suspend fun onEdt(action: () -> Unit) {
+        suspendCancellableCoroutine { continuation ->
+            SwingUtilities.invokeLater {
+                if (!continuation.isActive) return@invokeLater
+                action()
+                continuation.resume(Unit)
+            }
+        }
     }
 
     private companion object {

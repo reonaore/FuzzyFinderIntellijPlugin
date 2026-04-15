@@ -9,46 +9,61 @@ import com.intellij.notification.NotificationType
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.project.Project
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withContext
 import java.io.IOException
 import java.io.InputStream
 import java.nio.charset.StandardCharsets
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.util.concurrent.CancellationException
-import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
 @Service(Service.Level.PROJECT)
-class FuzzyFinderService(private val project: Project) {
+class FuzzyFinderService(
+    private val project: Project,
+    private val cs: CoroutineScope,
+) {
 
     private val cachedCandidates = ConcurrentHashMap<FdSearchOptions, List<Path>>()
-    private val inFlightCandidates = ConcurrentHashMap<FdSearchOptions, CompletableFuture<List<Path>>>()
+    private val inFlightCandidates = ConcurrentHashMap<FdSearchOptions, CompletableDeferred<List<Path>>>()
     private val settingsService: FuzzyFinderSettingsService
         get() = ApplicationManager.getApplication().getService(FuzzyFinderSettingsService::class.java)
 
     fun getCachedCandidates(options: FdSearchOptions): List<Path>? = cachedCandidates[options]
 
-    fun ensureCandidates(options: FdSearchOptions): List<Path> {
+    suspend fun ensureCandidates(options: FdSearchOptions): List<Path> {
         cachedCandidates[options]?.let { return it }
-        val future = inFlightCandidates.computeIfAbsent(options) {
-            CompletableFuture.supplyAsync {
-                discoverCandidates(options)
+        val deferred = inFlightCandidates.computeIfAbsent(options) {
+            CompletableDeferred<List<Path>>().also { future ->
+                cs.async {
+                    runCatching { discoverCandidates(options) }
+                        .onSuccess { future.complete(it) }
+                        .onFailure { future.completeExceptionally(it) }
+                }
             }
         }
 
         return try {
-            future.get().also { cachedCandidates[options] = it }
-        } catch (error: Exception) {
+            deferred.await().also { cachedCandidates[options] = it }
+        } catch (error: Throwable) {
             throw unwrapCandidateError(error)
         } finally {
-            if (future.isDone) {
-                inFlightCandidates.remove(options, future)
+            if (deferred.isCompleted) {
+                inFlightCandidates.remove(options, deferred)
             }
         }
     }
 
-    fun search(query: String, options: FdSearchOptions, limit: Int = MAX_RESULTS): SearchResult {
+    suspend fun search(query: String, options: FdSearchOptions, limit: Int = MAX_RESULTS): SearchResult {
         val candidates = ensureCandidates(options)
         val results = if (query.isBlank()) {
             candidates.take(limit)
@@ -66,18 +81,21 @@ class FuzzyFinderService(private val project: Project) {
 
     fun resolveSearchRoot(): Path? = project.basePath?.let(Paths::get)
 
-    fun streamCandidates(options: FdSearchOptions, onBatch: (List<Path>, Int) -> Unit): List<Path> {
+    suspend fun streamCandidates(
+        options: FdSearchOptions,
+        onBatch: suspend (List<Path>, Int) -> Unit,
+    ): List<Path> {
         cachedCandidates[options]?.let {
             onBatch(it, it.size)
             return it
         }
 
-        val future = CompletableFuture<List<Path>>()
-        val existing = inFlightCandidates.putIfAbsent(options, future)
+        val deferred = CompletableDeferred<List<Path>>()
+        val existing = inFlightCandidates.putIfAbsent(options, deferred)
         if (existing != null) {
             return try {
-                existing.get().also { onBatch(it, it.size) }
-            } catch (error: Exception) {
+                existing.await().also { onBatch(it, it.size) }
+            } catch (error: Throwable) {
                 throw unwrapCandidateError(error)
             }
         }
@@ -85,13 +103,13 @@ class FuzzyFinderService(private val project: Project) {
         return try {
             val result = discoverCandidatesStreaming(options, onBatch)
             cachedCandidates[options] = result
-            future.complete(result)
+            deferred.complete(result)
             result
-        } catch (error: Exception) {
-            future.completeExceptionally(error)
+        } catch (error: Throwable) {
+            deferred.completeExceptionally(error)
             throw error
         } finally {
-            inFlightCandidates.remove(options, future)
+            inFlightCandidates.remove(options, deferred)
         }
     }
 
@@ -102,7 +120,7 @@ class FuzzyFinderService(private val project: Project) {
             .notify(project)
     }
 
-    private fun discoverCandidates(options: FdSearchOptions): List<Path> {
+    private suspend fun discoverCandidates(options: FdSearchOptions): List<Path> {
         val stdout = runProcess(
             fdCommandLine(options),
         )
@@ -110,46 +128,56 @@ class FuzzyFinderService(private val project: Project) {
         return FuzzyFinderParsers.parseNulSeparatedPaths(stdout)
     }
 
-    private fun discoverCandidatesStreaming(
+    private suspend fun discoverCandidatesStreaming(
         options: FdSearchOptions,
-        onBatch: (List<Path>, Int) -> Unit,
-    ): List<Path> {
+        onBatch: suspend (List<Path>, Int) -> Unit,
+    ): List<Path> = withContext(Dispatchers.IO) {
         val commandLine = fdCommandLine(options)
         val process = createProcess(commandLine)
+        val cancellationHandle = currentCoroutineContext()[Job]?.invokeOnCompletion {
+            if (process.isAlive) {
+                process.destroyForcibly()
+            }
+        }
 
-        val stderrReader = CompletableFuture.supplyAsync {
+        val stderrReader = cs.async(Dispatchers.IO) {
             process.errorStream.bufferedReader().use { it.readText() }
         }
 
         val paths = mutableListOf<Path>()
         val batch = mutableListOf<Path>()
 
-        process.inputStream.use { input ->
-            readNulSeparatedPaths(input) { path ->
-                paths.add(path)
-                batch.add(path)
-                if (batch.size >= STREAM_BATCH_SIZE) {
-                    onBatch(batch.toList(), paths.size)
-                    batch.clear()
+        try {
+            process.inputStream.use { input ->
+                readNulSeparatedPaths(input) { path ->
+                    currentCoroutineContext().ensureActive()
+                    paths.add(path)
+                    batch.add(path)
+                    if (batch.size >= STREAM_BATCH_SIZE) {
+                        onBatch(batch.toList(), paths.size)
+                        batch.clear()
+                    }
                 }
             }
+
+            if (batch.isNotEmpty()) {
+                onBatch(batch.toList(), paths.size)
+            }
+
+            if (!process.waitFor(PROCESS_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                process.destroyForcibly()
+                throw FuzzyFinderException("Command timed out: ${commandLine.commandLineString}")
+            }
+
+            checkExitCode(commandLine, process.exitValue(), stderrReader.await())
+
+            paths
+        } finally {
+            cancellationHandle?.dispose()
         }
-
-        if (batch.isNotEmpty()) {
-            onBatch(batch.toList(), paths.size)
-        }
-
-        if (!process.waitFor(PROCESS_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-            process.destroyForcibly()
-            throw FuzzyFinderException("Command timed out: ${commandLine.commandLineString}")
-        }
-
-        checkExitCode(commandLine, process.exitValue(), stderrReader.get())
-
-        return paths
     }
 
-    private fun readNulSeparatedPaths(input: InputStream, onPath: (Path) -> Unit) {
+    private suspend fun readNulSeparatedPaths(input: InputStream, onPath: suspend (Path) -> Unit) {
         val chunk = ByteArray(STREAM_READ_BUFFER_SIZE)
         val current = java.io.ByteArrayOutputStream()
 
@@ -175,37 +203,49 @@ class FuzzyFinderService(private val project: Project) {
         }
     }
 
-    private fun runProcess(commandLine: GeneralCommandLine, stdin: ByteArray? = null): ByteArray {
+    private suspend fun runProcess(commandLine: GeneralCommandLine, stdin: ByteArray? = null): ByteArray =
+        withContext(Dispatchers.IO) {
         val process = createProcess(commandLine)
-
-        val stdoutReader = CompletableFuture.supplyAsync {
-            process.inputStream.use { it.readAllBytes() }
-        }
-        val stderrReader = CompletableFuture.supplyAsync {
-            process.errorStream.bufferedReader().use { it.readText() }
-        }
-
-        process.outputStream.use { output ->
-            if (stdin != null) {
-                output.write(stdin)
+        val cancellationHandle = currentCoroutineContext()[Job]?.invokeOnCompletion {
+            if (process.isAlive) {
+                process.destroyForcibly()
             }
         }
 
-        if (!process.waitFor(PROCESS_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-            process.destroyForcibly()
-            throw FuzzyFinderException("Command timed out: ${commandLine.commandLineString}")
+        try {
+            coroutineScope {
+                val stdoutReader = async(Dispatchers.IO) {
+                    process.inputStream.use { it.readAllBytes() }
+                }
+                val stderrReader = async(Dispatchers.IO) {
+                    process.errorStream.bufferedReader().use { it.readText() }
+                }
+
+                process.outputStream.use { output ->
+                    if (stdin != null) {
+                        output.write(stdin)
+                    }
+                }
+
+                if (!process.waitFor(PROCESS_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                    process.destroyForcibly()
+                    throw FuzzyFinderException("Command timed out: ${commandLine.commandLineString}")
+                }
+
+                val exitCode = process.exitValue()
+                val stdout = stdoutReader.await()
+                val stderr = stderrReader.await()
+
+                if (commandLine.exePath == settingsService.executablePath(SupportedCommand.FZF) && exitCode == 1) {
+                    return@coroutineScope ByteArray(0)
+                }
+                checkExitCode(commandLine, exitCode, stderr)
+
+                stdout
+            }
+        } finally {
+            cancellationHandle?.dispose()
         }
-
-        val exitCode = process.exitValue()
-        val stdout = stdoutReader.get()
-        val stderr = stderrReader.get()
-
-        if (commandLine.exePath == settingsService.executablePath(SupportedCommand.FZF) && exitCode == 1) {
-            return ByteArray(0)
-        }
-        checkExitCode(commandLine, exitCode, stderr)
-
-        return stdout
     }
 
     private fun fdCommandLine(options: FdSearchOptions): GeneralCommandLine {
@@ -304,7 +344,7 @@ internal fun buildFdParameters(options: FdSearchOptions, root: String): List<Str
     return parameters
 }
 
-private fun unwrapCandidateError(error: Exception): RuntimeException {
+private fun unwrapCandidateError(error: Throwable): RuntimeException {
     val cause = error.cause
     return when (cause) {
         is FuzzyFinderException -> cause
