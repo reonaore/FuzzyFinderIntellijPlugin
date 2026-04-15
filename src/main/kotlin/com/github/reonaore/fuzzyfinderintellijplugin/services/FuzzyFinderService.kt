@@ -1,5 +1,6 @@
 package com.github.reonaore.fuzzyfinderintellijplugin.services
 
+import com.github.reonaore.fuzzyfinderintellijplugin.MyBundle
 import com.github.reonaore.fuzzyfinderintellijplugin.settings.FuzzyFinderSettingsService
 import com.github.reonaore.fuzzyfinderintellijplugin.settings.SupportedCommand
 import com.github.reonaore.fuzzyfinderintellijplugin.util.FuzzyFinderParsers
@@ -8,7 +9,12 @@ import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.roots.ProjectRootManager
+import com.intellij.openapi.vfs.VirtualFileManager
+import com.intellij.openapi.vfs.newvfs.BulkFileListener
+import com.intellij.openapi.vfs.newvfs.events.VFileEvent
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -31,14 +37,34 @@ import java.util.concurrent.TimeUnit
 class FuzzyFinderService(
     private val project: Project,
     private val cs: CoroutineScope,
-) {
+) : Disposable {
 
     private val cachedCandidates = ConcurrentHashMap<FdSearchOptions, List<Path>>()
     private val inFlightCandidates = ConcurrentHashMap<FdSearchOptions, CompletableDeferred<List<Path>>>()
     private val settingsService: FuzzyFinderSettingsService
         get() = ApplicationManager.getApplication().getService(FuzzyFinderSettingsService::class.java)
 
+    init {
+        project.messageBus.connect(this).subscribe(
+            VirtualFileManager.VFS_CHANGES,
+            object : BulkFileListener {
+                override fun after(events: List<VFileEvent>) {
+                    if (events.any(::affectsSearchRoots)) {
+                        invalidateCaches()
+                    }
+                }
+            },
+        )
+    }
+
+    override fun dispose() = Unit
+
     fun getCachedCandidates(options: FdSearchOptions): List<Path>? = cachedCandidates[options]
+
+    fun invalidateCaches() {
+        cachedCandidates.clear()
+        inFlightCandidates.clear()
+    }
 
     suspend fun ensureCandidates(options: FdSearchOptions): List<Path> {
         cachedCandidates[options]?.let { return it }
@@ -79,7 +105,21 @@ class FuzzyFinderService(
         return SearchResult(totalCandidates = candidates.size, results = results)
     }
 
-    fun resolveSearchRoot(): Path? = project.basePath?.let(Paths::get)
+    fun resolveSearchRoots(): List<Path> {
+        val roots = ProjectRootManager.getInstance(project)
+            .contentRoots
+            .asSequence()
+            .mapNotNull { virtualFile ->
+                runCatching { Paths.get(virtualFile.path).normalize() }.getOrNull()
+            }
+            .toMutableList()
+
+        project.basePath
+            ?.let { runCatching { Paths.get(it).normalize() }.getOrNull() }
+            ?.let(roots::add)
+
+        return roots.distinct()
+    }
 
     suspend fun streamCandidates(
         options: FdSearchOptions,
@@ -121,60 +161,70 @@ class FuzzyFinderService(
     }
 
     private suspend fun discoverCandidates(options: FdSearchOptions): List<Path> {
-        val stdout = runProcess(
-            fdCommandLine(options),
-        )
-
-        return FuzzyFinderParsers.parseNulSeparatedPaths(stdout)
+        val seen = LinkedHashSet<Path>()
+        for (root in resolveSearchRootsOrThrow()) {
+            val stdout = runProcess(fdCommandLine(options, root))
+            FuzzyFinderParsers.parseNulSeparatedPaths(stdout)
+                .mapTo(seen) { normalizeCandidatePath(it, root) }
+        }
+        return seen.toList()
     }
 
     private suspend fun discoverCandidatesStreaming(
         options: FdSearchOptions,
         onBatch: suspend (List<Path>, Int) -> Unit,
     ): List<Path> = withContext(Dispatchers.IO) {
-        val commandLine = fdCommandLine(options)
-        val process = createProcess(commandLine)
-        val cancellationHandle = currentCoroutineContext()[Job]?.invokeOnCompletion {
-            if (process.isAlive) {
-                process.destroyForcibly()
-            }
-        }
-
-        val stderrReader = cs.async(Dispatchers.IO) {
-            process.errorStream.bufferedReader().use { it.readText() }
-        }
-
         val paths = mutableListOf<Path>()
         val batch = mutableListOf<Path>()
+        val seen = LinkedHashSet<Path>()
 
-        try {
-            process.inputStream.use { input ->
-                readNulSeparatedPaths(input) { path ->
-                    currentCoroutineContext().ensureActive()
-                    paths.add(path)
-                    batch.add(path)
-                    if (batch.size >= STREAM_BATCH_SIZE) {
-                        onBatch(batch.toList(), paths.size)
-                        batch.clear()
-                    }
+        for (root in resolveSearchRootsOrThrow()) {
+            currentCoroutineContext().ensureActive()
+            val commandLine = fdCommandLine(options, root)
+            val process = createProcess(commandLine)
+            val cancellationHandle = currentCoroutineContext()[Job]?.invokeOnCompletion {
+                if (process.isAlive) {
+                    process.destroyForcibly()
                 }
             }
-
-            if (batch.isNotEmpty()) {
-                onBatch(batch.toList(), paths.size)
+            val stderrReader = cs.async(Dispatchers.IO) {
+                process.errorStream.bufferedReader().use { it.readText() }
             }
 
-            if (!process.waitFor(PROCESS_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-                process.destroyForcibly()
-                throw FuzzyFinderException("Command timed out: ${commandLine.commandLineString}")
+            try {
+                process.inputStream.use { input ->
+                    readNulSeparatedPaths(input) { path ->
+                        currentCoroutineContext().ensureActive()
+                        val normalized = normalizeCandidatePath(path, root)
+                        if (!seen.add(normalized)) {
+                            return@readNulSeparatedPaths
+                        }
+
+                        paths.add(normalized)
+                        batch.add(normalized)
+                        if (batch.size >= STREAM_BATCH_SIZE) {
+                            onBatch(batch.toList(), paths.size)
+                            batch.clear()
+                        }
+                    }
+                }
+
+                if (!process.waitFor(PROCESS_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                    process.destroyForcibly()
+                    throw FuzzyFinderException(MyBundle.message("error.commandTimedOut", commandLine.commandLineString))
+                }
+
+                checkExitCode(commandLine, process.exitValue(), stderrReader.await())
+            } finally {
+                cancellationHandle?.dispose()
             }
-
-            checkExitCode(commandLine, process.exitValue(), stderrReader.await())
-
-            paths
-        } finally {
-            cancellationHandle?.dispose()
         }
+
+        if (batch.isNotEmpty()) {
+            onBatch(batch.toList(), paths.size)
+        }
+
+        paths
     }
 
     private suspend fun readNulSeparatedPaths(input: InputStream, onPath: suspend (Path) -> Unit) {
@@ -229,7 +279,7 @@ class FuzzyFinderService(
 
                 if (!process.waitFor(PROCESS_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
                     process.destroyForcibly()
-                    throw FuzzyFinderException("Command timed out: ${commandLine.commandLineString}")
+                    throw FuzzyFinderException(MyBundle.message("error.commandTimedOut", commandLine.commandLineString))
                 }
 
                 val exitCode = process.exitValue()
@@ -248,13 +298,10 @@ class FuzzyFinderService(
         }
     }
 
-    private fun fdCommandLine(options: FdSearchOptions): GeneralCommandLine {
-        val root = resolveSearchRoot()
-            ?: throw FuzzyFinderException("Project root is unavailable.")
-
+    private fun fdCommandLine(options: FdSearchOptions, root: Path): GeneralCommandLine {
         return GeneralCommandLine(settingsService.executablePath(SupportedCommand.FD))
             .withParentEnvironmentType(GeneralCommandLine.ParentEnvironmentType.CONSOLE)
-            .withParameters(buildFdParameters(options, root.toString()))
+            .withParameters(buildFdParameters(options, root))
     }
 
     private fun fzfCommandLine(query: String): GeneralCommandLine {
@@ -268,7 +315,7 @@ class FuzzyFinderService(
             commandLine.createProcess()
         } catch (error: IOException) {
             throw FuzzyFinderException(
-                "Failed to launch '${commandLine.exePath}': ${error.message.orEmpty()}",
+                MyBundle.message("error.commandLaunchFailed", commandLine.exePath, error.message.orEmpty()),
                 error,
             )
         }
@@ -277,10 +324,34 @@ class FuzzyFinderService(
     private fun checkExitCode(commandLine: GeneralCommandLine, exitCode: Int, stderr: String) {
         if (exitCode == 0) return
 
-        val stderrText = stderr.ifBlank { "No error output was produced." }
+        val stderrText = stderr.ifBlank { MyBundle.message("error.noCommandOutput") }
         throw FuzzyFinderException(
-            "Command failed: ${commandLine.commandLineString} (exit code $exitCode). $stderrText",
+            MyBundle.message("error.commandFailed", commandLine.commandLineString, exitCode, stderrText),
         )
+    }
+
+    private fun resolveSearchRootsOrThrow(): List<Path> {
+        val roots = resolveSearchRoots()
+        if (roots.isNotEmpty()) {
+            return roots
+        }
+
+        throw FuzzyFinderException(MyBundle.message("error.projectRootUnavailable"))
+    }
+
+    private fun normalizeCandidatePath(path: Path, root: Path): Path {
+        return if (path.isAbsolute) {
+            path.normalize()
+        } else {
+            root.resolve(path).normalize()
+        }
+    }
+
+    private fun affectsSearchRoots(event: VFileEvent): Boolean {
+        val eventPath = runCatching { Paths.get(event.path).normalize() }.getOrNull() ?: return false
+        return resolveSearchRoots().any { root ->
+            eventPath == root || eventPath.startsWith(root) || root.startsWith(eventPath)
+        }
     }
 
     private companion object {
@@ -317,7 +388,7 @@ enum class FdEntryType(val presentableName: String, val fdValue: String?) {
     override fun toString(): String = presentableName
 }
 
-internal fun buildFdParameters(options: FdSearchOptions, root: String): List<String> {
+internal fun buildFdParameters(options: FdSearchOptions, root: Path): List<String> {
     val parameters = mutableListOf<String>()
 
     options.entryType.fdValue?.let { entryType ->
@@ -340,7 +411,7 @@ internal fun buildFdParameters(options: FdSearchOptions, root: String): List<Str
             parameters += listOf("--exclude", pattern)
         }
 
-    parameters += listOf("--print0", ".", root)
+    parameters += listOf("--print0", ".", root.toString())
     return parameters
 }
 

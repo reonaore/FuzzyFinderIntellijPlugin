@@ -1,5 +1,6 @@
 package com.github.reonaore.fuzzyfinderintellijplugin.settings
 
+import com.github.reonaore.fuzzyfinderintellijplugin.MyBundle
 import com.intellij.openapi.options.Configurable
 import com.intellij.ui.components.JBTextField
 import java.awt.GridBagConstraints
@@ -14,7 +15,7 @@ class FuzzyFinderSettingsConfigurable : Configurable {
     private val fdPathField = JBTextField()
     private val fzfPathField = JBTextField()
 
-    override fun getDisplayName(): String = "Fuzzy Finder"
+    override fun getDisplayName(): String = MyBundle.message("settings.displayName")
 
     override fun createComponent(): JComponent {
         val settings = FuzzyFinderSettingsService.getInstance()
@@ -30,20 +31,20 @@ class FuzzyFinderSettingsConfigurable : Configurable {
                 insets = Insets(4, 0, 4, 0)
             }
 
-            add(JLabel("fd executable path"), constraints)
+            add(JLabel(MyBundle.message("settings.fd.path")), constraints)
             constraints.gridy++
             add(fdPathField, constraints)
             constraints.gridy++
-            add(JLabel("Leave blank to use 'fd' from PATH."), constraints)
+            add(JLabel(MyBundle.message("settings.fd.defaultHint")), constraints)
 
             constraints.gridy++
             constraints.insets = Insets(12, 0, 4, 0)
-            add(JLabel("fzf executable path"), constraints)
+            add(JLabel(MyBundle.message("settings.fzf.path")), constraints)
             constraints.gridy++
             constraints.insets = Insets(4, 0, 4, 0)
             add(fzfPathField, constraints)
             constraints.gridy++
-            add(JLabel("Leave blank to use 'fzf' from PATH."), constraints)
+            add(JLabel(MyBundle.message("settings.fzf.defaultHint")), constraints)
         }
     }
 

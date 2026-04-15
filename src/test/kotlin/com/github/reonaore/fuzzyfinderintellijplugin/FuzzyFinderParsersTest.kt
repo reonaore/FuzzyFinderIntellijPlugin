@@ -9,6 +9,8 @@ import com.github.reonaore.fuzzyfinderintellijplugin.services.buildFdParameters
 import com.github.reonaore.fuzzyfinderintellijplugin.util.FuzzyFinderParsers
 import junit.framework.TestCase.assertEquals
 import junit.framework.TestCase.assertTrue
+import org.junit.Assert.assertNotNull
+import java.nio.file.Path
 import java.nio.file.Paths
 
 class FuzzyFinderParsersTest {
@@ -44,7 +46,7 @@ class FuzzyFinderParsersTest {
                 respectGitIgnore = false,
                 excludePatterns = listOf(".git", "node_modules"),
             ),
-            "/repo",
+            Path.of("/repo"),
         )
 
         assertEquals(
@@ -74,5 +76,12 @@ class FuzzyFinderParsersTest {
         val settings = FuzzyFinderSettingsService()
 
         assertEquals("fzf", settings.executablePath(SupportedCommand.FZF))
+    }
+
+    @org.junit.Test
+    fun resolvesBundleMessagesForDialogAndErrors() {
+        assertNotNull(MyBundle.message("dialog.status.loadingProgress", 42))
+        assertNotNull(MyBundle.message("dialog.status.resultsDetailed", 10, 100))
+        assertNotNull(MyBundle.message("error.commandFailed", "cmd", 1, "stderr"))
     }
 }

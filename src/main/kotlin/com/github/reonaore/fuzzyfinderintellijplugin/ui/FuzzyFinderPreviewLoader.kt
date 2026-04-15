@@ -1,5 +1,6 @@
 package com.github.reonaore.fuzzyfinderintellijplugin.ui
 
+import com.github.reonaore.fuzzyfinderintellijplugin.MyBundle
 import com.github.reonaore.fuzzyfinderintellijplugin.util.FuzzyFinderParsers
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
@@ -13,20 +14,20 @@ class FuzzyFinderPreviewLoader {
 
     fun load(path: Path): PreviewContent {
         val virtualFile = LocalFileSystem.getInstance().findFileByNioFile(path)
-            ?: return PreviewContent(PREVIEW_MISSING, null)
+            ?: return PreviewContent(MyBundle.message("dialog.preview.missing"), null)
 
         if (virtualFile.isDirectory) {
-            return PreviewContent(PREVIEW_DIRECTORY, null)
+            return PreviewContent(MyBundle.message("dialog.preview.directory"), null)
         }
 
         if (virtualFile.fileType.isBinary) {
-            return PreviewContent(PREVIEW_BINARY, null)
+            return PreviewContent(MyBundle.message("dialog.preview.binary"), null)
         }
 
         return try {
             PreviewContent(readPreview(virtualFile), virtualFile)
         } catch (_: IOException) {
-            PreviewContent(PREVIEW_MISSING, null)
+            PreviewContent(MyBundle.message("dialog.preview.missing"), null)
         }
     }
 
@@ -55,9 +56,6 @@ class FuzzyFinderPreviewLoader {
     companion object {
         private const val PREVIEW_CHAR_LIMIT = 12000
         private const val READ_BUFFER_SIZE = 2048
-        private const val PREVIEW_MISSING = "Preview unavailable: file not found."
-        private const val PREVIEW_DIRECTORY = "Preview unavailable: directory."
-        private const val PREVIEW_BINARY = "Preview unavailable: binary file."
     }
 }
 
