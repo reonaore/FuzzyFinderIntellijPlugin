@@ -10,8 +10,11 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.project.Project
 import java.io.IOException
+import java.io.InputStream
+import java.nio.charset.StandardCharsets
 import java.nio.file.Path
 import java.nio.file.Paths
+import java.util.concurrent.CancellationException
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
@@ -20,11 +23,29 @@ import java.util.concurrent.TimeUnit
 class FuzzyFinderService(private val project: Project) {
 
     private val cachedCandidates = ConcurrentHashMap<FdSearchOptions, List<Path>>()
+    private val inFlightCandidates = ConcurrentHashMap<FdSearchOptions, CompletableFuture<List<Path>>>()
     private val settingsService: FuzzyFinderSettingsService
         get() = ApplicationManager.getApplication().getService(FuzzyFinderSettingsService::class.java)
 
+    fun getCachedCandidates(options: FdSearchOptions): List<Path>? = cachedCandidates[options]
+
     fun ensureCandidates(options: FdSearchOptions): List<Path> {
-        return cachedCandidates.computeIfAbsent(options, ::discoverCandidates)
+        cachedCandidates[options]?.let { return it }
+        val future = inFlightCandidates.computeIfAbsent(options) {
+            CompletableFuture.supplyAsync {
+                discoverCandidates(options)
+            }
+        }
+
+        return try {
+            future.get().also { cachedCandidates[options] = it }
+        } catch (error: Exception) {
+            throw unwrapCandidateError(error)
+        } finally {
+            if (future.isDone) {
+                inFlightCandidates.remove(options, future)
+            }
+        }
     }
 
     fun search(query: String, options: FdSearchOptions, limit: Int = MAX_RESULTS): SearchResult {
@@ -47,6 +68,35 @@ class FuzzyFinderService(private val project: Project) {
 
     fun resolveSearchRoot(): Path? = project.basePath?.let(Paths::get)
 
+    fun streamCandidates(options: FdSearchOptions, onBatch: (List<Path>, Int) -> Unit): List<Path> {
+        cachedCandidates[options]?.let {
+            onBatch(it, it.size)
+            return it
+        }
+
+        val future = CompletableFuture<List<Path>>()
+        val existing = inFlightCandidates.putIfAbsent(options, future)
+        if (existing != null) {
+            return try {
+                existing.get().also { onBatch(it, it.size) }
+            } catch (error: Exception) {
+                throw unwrapCandidateError(error)
+            }
+        }
+
+        return try {
+            val result = discoverCandidatesStreaming(options, onBatch)
+            cachedCandidates[options] = result
+            future.complete(result)
+            result
+        } catch (error: Exception) {
+            future.completeExceptionally(error)
+            throw error
+        } finally {
+            inFlightCandidates.remove(options, future)
+        }
+    }
+
     fun notifyError(message: String) {
         NotificationGroupManager.getInstance()
             .getNotificationGroup("Fuzzy Finder Notifications")
@@ -65,6 +115,91 @@ class FuzzyFinderService(private val project: Project) {
         )
 
         return FuzzyFinderParsers.parseNulSeparatedPaths(stdout)
+    }
+
+    private fun discoverCandidatesStreaming(
+        options: FdSearchOptions,
+        onBatch: (List<Path>, Int) -> Unit,
+    ): List<Path> {
+        val root = resolveSearchRoot()
+            ?: throw FuzzyFinderException("Project root is unavailable.")
+
+        val commandLine = GeneralCommandLine(settingsService.executablePath(SupportedCommand.FD))
+            .withParentEnvironmentType(GeneralCommandLine.ParentEnvironmentType.CONSOLE)
+            .withParameters(buildFdParameters(options, root.toString()))
+
+        val process = try {
+            commandLine.createProcess()
+        } catch (error: IOException) {
+            throw FuzzyFinderException(
+                "Failed to launch '${commandLine.exePath}': ${error.message.orEmpty()}",
+                error,
+            )
+        }
+
+        val stderrReader = CompletableFuture.supplyAsync {
+            process.errorStream.bufferedReader().use { it.readText() }
+        }
+
+        val paths = mutableListOf<Path>()
+        val batch = mutableListOf<Path>()
+
+        process.inputStream.use { input ->
+            readNulSeparatedPaths(input) { path ->
+                paths.add(path)
+                batch.add(path)
+                if (batch.size >= STREAM_BATCH_SIZE) {
+                    onBatch(batch.toList(), paths.size)
+                    batch.clear()
+                }
+            }
+        }
+
+        if (batch.isNotEmpty()) {
+            onBatch(batch.toList(), paths.size)
+        }
+
+        if (!process.waitFor(PROCESS_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+            process.destroyForcibly()
+            throw FuzzyFinderException("Command timed out: ${commandLine.commandLineString}")
+        }
+
+        val exitCode = process.exitValue()
+        val stderr = stderrReader.get()
+        if (exitCode != 0) {
+            val stderrText = stderr.ifBlank { "No error output was produced." }
+            throw FuzzyFinderException(
+                "Command failed: ${commandLine.commandLineString} (exit code $exitCode). $stderrText",
+            )
+        }
+
+        return paths
+    }
+
+    private fun readNulSeparatedPaths(input: InputStream, onPath: (Path) -> Unit) {
+        val chunk = ByteArray(STREAM_READ_BUFFER_SIZE)
+        val current = java.io.ByteArrayOutputStream()
+
+        while (true) {
+            val read = input.read(chunk)
+            if (read <= 0) break
+
+            for (index in 0 until read) {
+                val byte = chunk[index]
+                if (byte.toInt() == 0) {
+                    if (current.size() > 0) {
+                        onPath(Paths.get(current.toString(StandardCharsets.UTF_8)))
+                        current.reset()
+                    }
+                } else {
+                    current.write(byte.toInt())
+                }
+            }
+        }
+
+        if (current.size() > 0) {
+            onPath(Paths.get(current.toString(StandardCharsets.UTF_8)))
+        }
     }
 
     private fun runProcess(commandLine: GeneralCommandLine, stdin: ByteArray? = null): ByteArray {
@@ -116,6 +251,8 @@ class FuzzyFinderService(private val project: Project) {
     private companion object {
         const val MAX_RESULTS = 200
         const val PROCESS_TIMEOUT_SECONDS = 15L
+        const val STREAM_BATCH_SIZE = 100
+        const val STREAM_READ_BUFFER_SIZE = 8192
     }
 }
 
@@ -170,4 +307,14 @@ internal fun buildFdParameters(options: FdSearchOptions, root: String): List<Str
 
     parameters += listOf("--print0", ".", root)
     return parameters
+}
+
+private fun unwrapCandidateError(error: Exception): RuntimeException {
+    val cause = error.cause
+    return when (cause) {
+        is FuzzyFinderException -> cause
+        is CancellationException -> FuzzyFinderException("Candidate loading was cancelled.", cause)
+        is RuntimeException -> cause
+        else -> FuzzyFinderException(cause?.message ?: error.message ?: "Candidate loading failed.", cause ?: error)
+    }
 }

@@ -24,8 +24,6 @@ import com.intellij.ui.JBSplitter
 import com.intellij.ui.ScrollPaneFactory
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBList
-import com.intellij.ui.components.JBScrollPane
-import com.intellij.ui.components.JBTextArea
 import com.intellij.ui.components.JBTextField
 import java.awt.BorderLayout
 import java.awt.Dimension
@@ -70,6 +68,7 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
     private val previewDocument: Document = EditorFactory.getInstance().createDocument(PREVIEW_EMPTY)
     private val previewEditor = EditorFactory.getInstance().createViewer(previewDocument, project) as EditorEx
     private val requestId = AtomicInteger()
+    private val streamedCandidates = mutableListOf<Path>()
     private val searchTimer = Timer(SEARCH_DEBOUNCE_MS) { triggerSearch() }
 
     init {
@@ -245,15 +244,32 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
     }
 
     private fun loadCandidates() {
-        statusLabel.text = STATUS_LOADING
+        triggerSearch()
+    }
+
+    private fun triggerSearch() {
+        val query = searchField.text
+        val options = currentOptions()
+        val currentRequest = requestId.incrementAndGet()
+        val cachedCandidates = service.getCachedCandidates(options)
+
+        if (query.isBlank() && cachedCandidates == null) {
+            startStreamingLoad(currentRequest, options)
+            return
+        }
+
+        statusLabel.text = STATUS_SEARCHING
+
         ApplicationManager.getApplication().executeOnPooledThread {
             try {
-                val searchResult = service.search(searchField.text, currentOptions())
+                val searchResult = service.search(query, options)
                 SwingUtilities.invokeLater {
+                    if (currentRequest != requestId.get()) return@invokeLater
                     applySearchResult(searchResult)
                 }
             } catch (error: FuzzyFinderException) {
                 SwingUtilities.invokeLater {
+                    if (currentRequest != requestId.get()) return@invokeLater
                     statusLabel.text = STATUS_ERROR
                     service.notifyError(error.message ?: STATUS_ERROR)
                 }
@@ -261,17 +277,30 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
         }
     }
 
-    private fun triggerSearch() {
-        val query = searchField.text
-        val currentRequest = requestId.incrementAndGet()
-        statusLabel.text = STATUS_SEARCHING
+    private fun startStreamingLoad(currentRequest: Int, options: FdSearchOptions) {
+        streamedCandidates.clear()
+        updateResults(emptyList())
+        statusLabel.text = STATUS_LOADING
 
         ApplicationManager.getApplication().executeOnPooledThread {
             try {
-                val searchResult = service.search(query, currentOptions())
+                val candidates = service.streamCandidates(options) { batch, total ->
+                    SwingUtilities.invokeLater {
+                        if (currentRequest != requestId.get()) return@invokeLater
+                        if (searchField.text.isNotBlank()) return@invokeLater
+                        streamedCandidates += batch
+                        updateResults(streamedCandidates.take(INITIAL_RESULT_LIMIT))
+                        statusLabel.text = "Loading files... $total found"
+                    }
+                }
+
                 SwingUtilities.invokeLater {
                     if (currentRequest != requestId.get()) return@invokeLater
-                    applySearchResult(searchResult)
+                    if (searchField.text.isBlank()) {
+                        applySearchResult(SearchResult(candidates.size, candidates.take(INITIAL_RESULT_LIMIT)))
+                    } else {
+                        triggerSearch()
+                    }
                 }
             } catch (error: FuzzyFinderException) {
                 SwingUtilities.invokeLater {
