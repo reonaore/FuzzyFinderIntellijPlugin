@@ -1,7 +1,10 @@
 package com.github.reonaore.fuzzyfinderintellijplugin.ui
 
+import com.github.reonaore.fuzzyfinderintellijplugin.services.FdEntryType
+import com.github.reonaore.fuzzyfinderintellijplugin.services.FdSearchOptions
 import com.github.reonaore.fuzzyfinderintellijplugin.services.FuzzyFinderException
 import com.github.reonaore.fuzzyfinderintellijplugin.services.FuzzyFinderService
+import com.github.reonaore.fuzzyfinderintellijplugin.services.SearchResult
 import com.github.reonaore.fuzzyfinderintellijplugin.util.FuzzyFinderParsers
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.service
@@ -23,6 +26,7 @@ import com.intellij.ui.components.JBTextField
 import java.awt.BorderLayout
 import java.awt.Dimension
 import java.awt.Font
+import java.awt.FlowLayout
 import java.awt.event.ActionEvent
 import java.awt.event.KeyEvent
 import java.io.BufferedReader
@@ -33,9 +37,12 @@ import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicInteger
 import javax.swing.AbstractAction
 import javax.swing.Action
+import javax.swing.JCheckBox
+import javax.swing.JComboBox
 import javax.swing.DefaultListCellRenderer
 import javax.swing.JComponent
 import javax.swing.JList
+import javax.swing.JLabel
 import javax.swing.JPanel
 import javax.swing.KeyStroke
 import javax.swing.ListSelectionModel
@@ -47,6 +54,11 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
 
     private val service = project.service<FuzzyFinderService>()
     private val searchField = JBTextField()
+    private val typeComboBox = JComboBox(FdEntryType.entries.toTypedArray())
+    private val includeHiddenCheckBox = JCheckBox("Hidden")
+    private val followSymlinksCheckBox = JCheckBox("Follow symlinks")
+    private val respectGitIgnoreCheckBox = JCheckBox("Respect .gitignore")
+    private val excludeField = JBTextField(DEFAULT_EXCLUDES)
     private val statusLabel = JBLabel(STATUS_LOADING)
     private val resultModel = CollectionListModel<Path>()
     private val resultList = JBList(resultModel)
@@ -64,6 +76,11 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
     }
 
     override fun createCenterPanel(): JComponent {
+        val controlsPanel = JPanel(BorderLayout(0, 8)).apply {
+            add(searchField, BorderLayout.NORTH)
+            add(createOptionsPanel(), BorderLayout.CENTER)
+        }
+
         val splitter = JBSplitter(false, 0.42f).apply {
             firstComponent = JPanel(BorderLayout()).apply {
                 add(ScrollPaneFactory.createScrollPane(resultList), BorderLayout.CENTER)
@@ -73,7 +90,7 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
 
         return JPanel(BorderLayout(0, 8)).apply {
             preferredSize = Dimension(960, 640)
-            add(searchField, BorderLayout.NORTH)
+            add(controlsPanel, BorderLayout.NORTH)
             add(splitter, BorderLayout.CENTER)
             add(statusLabel, BorderLayout.SOUTH)
         }
@@ -84,11 +101,14 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
     override fun doOKAction() {
         val selected = resultList.selectedValue ?: return
         val virtualFile = LocalFileSystem.getInstance().findFileByNioFile(selected) ?: return
+        if (virtualFile.isDirectory) return
         FileEditorManager.getInstance(project).openFile(virtualFile, true)
         super.doOKAction()
     }
 
     private fun configureUi() {
+        configureOptionControls()
+
         resultList.selectionMode = ListSelectionModel.SINGLE_SELECTION
         resultList.cellRenderer = object : DefaultListCellRenderer() {
             override fun getListCellRendererComponent(
@@ -134,14 +154,43 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
         })
     }
 
+    private fun createOptionsPanel(): JComponent {
+        return JPanel(FlowLayout(FlowLayout.LEFT, 8, 0)).apply {
+            add(JLabel("Type"))
+            add(typeComboBox)
+            add(includeHiddenCheckBox)
+            add(followSymlinksCheckBox)
+            add(respectGitIgnoreCheckBox)
+            add(JLabel("Exclude"))
+            excludeField.columns = 20
+            add(excludeField)
+        }
+    }
+
+    private fun configureOptionControls() {
+        typeComboBox.selectedItem = FdEntryType.FILES
+        includeHiddenCheckBox.isSelected = false
+        followSymlinksCheckBox.isSelected = true
+        respectGitIgnoreCheckBox.isSelected = true
+
+        typeComboBox.addActionListener { searchTimer.restart() }
+        includeHiddenCheckBox.addActionListener { searchTimer.restart() }
+        followSymlinksCheckBox.addActionListener { searchTimer.restart() }
+        respectGitIgnoreCheckBox.addActionListener { searchTimer.restart() }
+        excludeField.document.addDocumentListener(object : DocumentAdapter() {
+            override fun textChanged(e: javax.swing.event.DocumentEvent) {
+                searchTimer.restart()
+            }
+        })
+    }
+
     private fun loadCandidates() {
         statusLabel.text = STATUS_LOADING
         ApplicationManager.getApplication().executeOnPooledThread {
             try {
-                val candidates = service.ensureCandidates()
+                val searchResult = service.search(searchField.text, currentOptions())
                 SwingUtilities.invokeLater {
-                    updateResults(candidates.take(INITIAL_RESULT_LIMIT))
-                    statusLabel.text = "Loaded ${candidates.size} files."
+                    applySearchResult(searchResult)
                 }
             } catch (error: FuzzyFinderException) {
                 SwingUtilities.invokeLater {
@@ -159,11 +208,10 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
 
         ApplicationManager.getApplication().executeOnPooledThread {
             try {
-                val results = service.filterCandidates(query)
+                val searchResult = service.search(query, currentOptions())
                 SwingUtilities.invokeLater {
                     if (currentRequest != requestId.get()) return@invokeLater
-                    updateResults(results)
-                    statusLabel.text = "Showing ${results.size} results."
+                    applySearchResult(searchResult)
                 }
             } catch (error: FuzzyFinderException) {
                 SwingUtilities.invokeLater {
@@ -173,6 +221,24 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
                 }
             }
         }
+    }
+
+    private fun applySearchResult(searchResult: SearchResult) {
+        updateResults(searchResult.results)
+        statusLabel.text = "Showing ${searchResult.results.size} results from ${searchResult.totalCandidates} candidates."
+    }
+
+    private fun currentOptions(): FdSearchOptions {
+        return FdSearchOptions(
+            entryType = typeComboBox.selectedItem as? FdEntryType ?: FdEntryType.FILES,
+            includeHidden = includeHiddenCheckBox.isSelected,
+            followSymlinks = followSymlinksCheckBox.isSelected,
+            respectGitIgnore = respectGitIgnoreCheckBox.isSelected,
+            excludePatterns = excludeField.text
+                .split(',')
+                .map(String::trim)
+                .filter(String::isNotEmpty),
+        )
     }
 
     private fun updateResults(paths: List<Path>) {
@@ -187,7 +253,8 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
 
     private fun updatePreview(@Suppress("UNUSED_PARAMETER") event: ListSelectionEvent) {
         val selected = resultList.selectedValue
-        isOKActionEnabled = selected != null
+        val selectedFile = selected?.let(LocalFileSystem.getInstance()::findFileByNioFile)
+        isOKActionEnabled = selectedFile != null && !selectedFile.isDirectory
         previewArea.text = selected?.let(::loadPreviewText) ?: PREVIEW_EMPTY
         previewArea.caretPosition = 0
     }
@@ -195,6 +262,10 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
     private fun loadPreviewText(path: Path): String {
         val virtualFile = LocalFileSystem.getInstance().findFileByNioFile(path)
             ?: return PREVIEW_MISSING
+
+        if (virtualFile.isDirectory) {
+            return PREVIEW_DIRECTORY
+        }
 
         if (virtualFile.fileType.isBinary) {
             return PREVIEW_BINARY
@@ -242,6 +313,8 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
         const val STATUS_ERROR = "Search failed."
         const val PREVIEW_EMPTY = "No file selected."
         const val PREVIEW_MISSING = "Preview unavailable: file not found."
+        const val PREVIEW_DIRECTORY = "Preview unavailable: directory."
         const val PREVIEW_BINARY = "Preview unavailable: binary file."
+        const val DEFAULT_EXCLUDES = ".git"
     }
 }

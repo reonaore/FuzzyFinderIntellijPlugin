@@ -1,5 +1,8 @@
 package com.github.reonaore.fuzzyfinderintellijplugin
 
+import com.github.reonaore.fuzzyfinderintellijplugin.services.FdEntryType
+import com.github.reonaore.fuzzyfinderintellijplugin.services.FdSearchOptions
+import com.github.reonaore.fuzzyfinderintellijplugin.services.buildFdParameters
 import com.github.reonaore.fuzzyfinderintellijplugin.util.FuzzyFinderParsers
 import junit.framework.TestCase.assertEquals
 import junit.framework.TestCase.assertTrue
@@ -26,5 +29,32 @@ class FuzzyFinderParsersTest {
         val preview = FuzzyFinderParsers.appendPreviewSuffix("body", truncated = true)
 
         assertTrue(preview.contains("preview truncated"))
+    }
+
+    @org.junit.Test
+    fun buildsFdParametersFromOptions() {
+        val parameters = buildFdParameters(
+            FdSearchOptions(
+                entryType = FdEntryType.EXECUTABLES,
+                includeHidden = true,
+                followSymlinks = false,
+                respectGitIgnore = false,
+                excludePatterns = listOf(".git", "node_modules"),
+            ),
+            "/repo",
+        )
+
+        assertEquals(
+            listOf(
+                "--type", "x",
+                "--absolute-path",
+                "--hidden",
+                "--no-ignore",
+                "--exclude", ".git",
+                "--exclude", "node_modules",
+                "--print0", ".", "/repo",
+            ),
+            parameters,
+        )
     }
 }

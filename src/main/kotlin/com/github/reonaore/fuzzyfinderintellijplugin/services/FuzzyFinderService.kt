@@ -10,36 +10,34 @@ import java.io.IOException
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
 @Service(Service.Level.PROJECT)
 class FuzzyFinderService(private val project: Project) {
 
-    @Volatile
-    private var cachedCandidates: List<Path>? = null
+    private val cachedCandidates = ConcurrentHashMap<FdSearchOptions, List<Path>>()
 
-    fun ensureCandidates(): List<Path> {
-        cachedCandidates?.let { return it }
-        synchronized(this) {
-            cachedCandidates?.let { return it }
-            return discoverCandidates().also { cachedCandidates = it }
-        }
+    fun ensureCandidates(options: FdSearchOptions): List<Path> {
+        return cachedCandidates.computeIfAbsent(options, ::discoverCandidates)
     }
 
-    fun filterCandidates(query: String, limit: Int = MAX_RESULTS): List<Path> {
-        val candidates = ensureCandidates()
-        if (query.isBlank()) {
-            return candidates.take(limit)
+    fun search(query: String, options: FdSearchOptions, limit: Int = MAX_RESULTS): SearchResult {
+        val candidates = ensureCandidates(options)
+        val results = if (query.isBlank()) {
+            candidates.take(limit)
+        } else {
+            val stdout = runProcess(
+                GeneralCommandLine("fzf")
+                    .withParentEnvironmentType(GeneralCommandLine.ParentEnvironmentType.CONSOLE)
+                    .withParameters("--filter", query, "--scheme=path", "--read0", "--print0"),
+                stdin = FuzzyFinderParsers.toNulSeparatedBytes(candidates),
+            )
+
+            FuzzyFinderParsers.parseNulSeparatedPaths(stdout).take(limit)
         }
 
-        val stdout = runProcess(
-            GeneralCommandLine("fzf")
-                .withParentEnvironmentType(GeneralCommandLine.ParentEnvironmentType.CONSOLE)
-                .withParameters("--filter", query, "--scheme=path", "--read0", "--print0"),
-            stdin = FuzzyFinderParsers.toNulSeparatedBytes(candidates),
-        )
-
-        return FuzzyFinderParsers.parseNulSeparatedPaths(stdout).take(limit)
+        return SearchResult(totalCandidates = candidates.size, results = results)
     }
 
     fun resolveSearchRoot(): Path? = project.basePath?.let(Paths::get)
@@ -51,23 +49,14 @@ class FuzzyFinderService(private val project: Project) {
             .notify(project)
     }
 
-    private fun discoverCandidates(): List<Path> {
+    private fun discoverCandidates(options: FdSearchOptions): List<Path> {
         val root = resolveSearchRoot()
             ?: throw FuzzyFinderException("Project root is unavailable.")
 
         val stdout = runProcess(
             GeneralCommandLine("fd")
                 .withParentEnvironmentType(GeneralCommandLine.ParentEnvironmentType.CONSOLE)
-                .withParameters(
-                    "--type", "f",
-                    "--absolute-path",
-                    "--hidden",
-                    "--follow",
-                    "--exclude", ".git",
-                    "--print0",
-                    ".",
-                    root.toString(),
-                ),
+                .withParameters(buildFdParameters(options, root.toString())),
         )
 
         return FuzzyFinderParsers.parseNulSeparatedPaths(stdout)
@@ -126,3 +115,54 @@ class FuzzyFinderService(private val project: Project) {
 }
 
 class FuzzyFinderException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
+
+data class SearchResult(
+    val totalCandidates: Int,
+    val results: List<Path>,
+)
+
+data class FdSearchOptions(
+    val entryType: FdEntryType = FdEntryType.FILES,
+    val includeHidden: Boolean = false,
+    val followSymlinks: Boolean = true,
+    val respectGitIgnore: Boolean = true,
+    val excludePatterns: List<String> = listOf(".git"),
+)
+
+enum class FdEntryType(val presentableName: String, val fdValue: String?) {
+    ANY("Any", null),
+    FILES("Files", "f"),
+    DIRECTORIES("Directories", "d"),
+    SYMLINKS("Symlinks", "l"),
+    EXECUTABLES("Executables", "x"),
+    EMPTY("Empty", "e");
+
+    override fun toString(): String = presentableName
+}
+
+internal fun buildFdParameters(options: FdSearchOptions, root: String): List<String> {
+    val parameters = mutableListOf<String>()
+
+    options.entryType.fdValue?.let { entryType ->
+        parameters += listOf("--type", entryType)
+    }
+    parameters += "--absolute-path"
+    if (options.includeHidden) {
+        parameters += "--hidden"
+    }
+    if (options.followSymlinks) {
+        parameters += "--follow"
+    }
+    if (!options.respectGitIgnore) {
+        parameters += "--no-ignore"
+    }
+    options.excludePatterns
+        .map(String::trim)
+        .filter(String::isNotEmpty)
+        .forEach { pattern ->
+            parameters += listOf("--exclude", pattern)
+        }
+
+    parameters += listOf("--print0", ".", root)
+    return parameters
+}
