@@ -8,8 +8,12 @@ import com.github.reonaore.fuzzyfinderintellijplugin.services.SearchResult
 import com.github.reonaore.fuzzyfinderintellijplugin.util.FuzzyFinderParsers
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.service
-import com.intellij.openapi.editor.colors.EditorColorsManager
+import com.intellij.openapi.editor.Document
+import com.intellij.openapi.editor.EditorFactory
+import com.intellij.openapi.editor.ex.EditorEx
+import com.intellij.openapi.editor.highlighter.EditorHighlighterFactory
 import com.intellij.openapi.fileEditor.FileEditorManager
+import com.intellij.openapi.fileTypes.PlainTextFileType
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.openapi.vfs.LocalFileSystem
@@ -25,10 +29,11 @@ import com.intellij.ui.components.JBTextArea
 import com.intellij.ui.components.JBTextField
 import java.awt.BorderLayout
 import java.awt.Dimension
-import java.awt.Font
 import java.awt.FlowLayout
 import java.awt.event.ActionEvent
 import java.awt.event.KeyEvent
+import java.awt.event.MouseAdapter
+import java.awt.event.MouseEvent
 import java.io.BufferedReader
 import java.io.IOException
 import java.io.InputStreamReader
@@ -62,7 +67,8 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
     private val statusLabel = JBLabel(STATUS_LOADING)
     private val resultModel = CollectionListModel<Path>()
     private val resultList = JBList(resultModel)
-    private val previewArea = JBTextArea()
+    private val previewDocument: Document = EditorFactory.getInstance().createDocument(PREVIEW_EMPTY)
+    private val previewEditor = EditorFactory.getInstance().createViewer(previewDocument, project) as EditorEx
     private val requestId = AtomicInteger()
     private val searchTimer = Timer(SEARCH_DEBOUNCE_MS) { triggerSearch() }
 
@@ -85,7 +91,7 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
             firstComponent = JPanel(BorderLayout()).apply {
                 add(ScrollPaneFactory.createScrollPane(resultList), BorderLayout.CENTER)
             }
-            secondComponent = JBScrollPane(previewArea)
+            secondComponent = createPreviewComponent()
         }
 
         return JPanel(BorderLayout(0, 8)).apply {
@@ -97,6 +103,11 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
     }
 
     override fun createActions(): Array<Action> = arrayOf(okAction, cancelAction)
+
+    override fun dispose() {
+        EditorFactory.getInstance().releaseEditor(previewEditor)
+        super.dispose()
+    }
 
     override fun doOKAction() {
         val selected = resultList.selectedValue ?: return
@@ -126,6 +137,13 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
             }
         }
         resultList.addListSelectionListener(this::updatePreview)
+        resultList.addMouseListener(object : MouseAdapter() {
+            override fun mouseClicked(event: MouseEvent) {
+                if (event.clickCount == 2 && resultList.selectedValue != null) {
+                    doOKAction()
+                }
+            }
+        })
 
         searchField.emptyText.text = SEARCH_PLACEHOLDER
         searchField.document.addDocumentListener(object : DocumentAdapter() {
@@ -133,14 +151,8 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
                 searchTimer.restart()
             }
         })
-
-        previewArea.isEditable = false
-        previewArea.font = Font(
-            EditorColorsManager.getInstance().globalScheme.editorFontName,
-            Font.PLAIN,
-            EditorColorsManager.getInstance().globalScheme.editorFontSize,
-        )
-        previewArea.text = PREVIEW_EMPTY
+        configureSearchNavigation()
+        configurePreviewEditor()
 
         searchTimer.isRepeats = false
 
@@ -152,6 +164,54 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
                 }
             }
         })
+    }
+
+    private fun createPreviewComponent(): JComponent = previewEditor.component
+
+    private fun configurePreviewEditor() {
+        previewEditor.settings.apply {
+            isLineNumbersShown = true
+            isFoldingOutlineShown = false
+            isRightMarginShown = false
+            isWhitespacesShown = false
+            isCaretRowShown = false
+            additionalColumnsCount = 1
+            additionalLinesCount = 1
+        }
+        previewEditor.setCaretEnabled(false)
+    }
+
+    private fun configureSearchNavigation() {
+        registerSearchAction("selectNextResult", KeyStroke.getKeyStroke(KeyEvent.VK_N, KeyEvent.CTRL_DOWN_MASK)) {
+            moveSelection(1)
+        }
+        registerSearchAction("selectPreviousResult", KeyStroke.getKeyStroke(KeyEvent.VK_P, KeyEvent.CTRL_DOWN_MASK)) {
+            moveSelection(-1)
+        }
+        registerSearchAction("openSelectedResult", KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0)) {
+            if (resultList.selectedValue != null) {
+                doOKAction()
+            }
+        }
+    }
+
+    private fun registerSearchAction(actionId: String, keyStroke: KeyStroke, handler: () -> Unit) {
+        searchField.inputMap.put(keyStroke, actionId)
+        searchField.actionMap.put(actionId, object : AbstractAction() {
+            override fun actionPerformed(e: ActionEvent) {
+                handler()
+            }
+        })
+    }
+
+    private fun moveSelection(delta: Int) {
+        val size = resultModel.size
+        if (size == 0) return
+
+        val currentIndex = resultList.selectedIndex.takeIf { it >= 0 } ?: 0
+        val nextIndex = (currentIndex + delta).coerceIn(0, size - 1)
+        resultList.selectedIndex = nextIndex
+        resultList.ensureIndexIsVisible(nextIndex)
     }
 
     private fun createOptionsPanel(): JComponent {
@@ -247,7 +307,7 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
             resultList.selectedIndex = 0
         } else {
             isOKActionEnabled = false
-            previewArea.text = PREVIEW_EMPTY
+            updatePreviewContent(PREVIEW_EMPTY)
         }
     }
 
@@ -255,8 +315,12 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
         val selected = resultList.selectedValue
         val selectedFile = selected?.let(LocalFileSystem.getInstance()::findFileByNioFile)
         isOKActionEnabled = selectedFile != null && !selectedFile.isDirectory
-        previewArea.text = selected?.let(::loadPreviewText) ?: PREVIEW_EMPTY
-        previewArea.caretPosition = 0
+        if (selectedFile == null) {
+            updatePreviewContent(PREVIEW_EMPTY)
+            return
+        }
+
+        updatePreviewContent(selected.let(::loadPreviewText), selectedFile)
     }
 
     private fun loadPreviewText(path: Path): String {
@@ -276,6 +340,20 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
         } catch (_: IOException) {
             PREVIEW_MISSING
         }
+    }
+
+    private fun updatePreviewContent(text: String, virtualFile: VirtualFile? = null) {
+        ApplicationManager.getApplication().runWriteAction {
+            previewDocument.setText(text)
+        }
+        val highlighter = if (virtualFile != null && !virtualFile.isDirectory && !virtualFile.fileType.isBinary) {
+            EditorHighlighterFactory.getInstance().createEditorHighlighter(project, virtualFile)
+        } else {
+            EditorHighlighterFactory.getInstance().createEditorHighlighter(project, PlainTextFileType.INSTANCE)
+        }
+        previewEditor.highlighter = highlighter
+        previewEditor.caretModel.moveToOffset(0)
+        previewEditor.scrollingModel.scrollVertically(0)
     }
 
     private fun readPreview(file: VirtualFile): String {
