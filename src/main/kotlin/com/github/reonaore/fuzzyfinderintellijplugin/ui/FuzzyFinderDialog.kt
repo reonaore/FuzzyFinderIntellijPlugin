@@ -263,13 +263,11 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
         ApplicationManager.getApplication().executeOnPooledThread {
             try {
                 val searchResult = service.search(query, options)
-                SwingUtilities.invokeLater {
-                    if (currentRequest != requestId.get()) return@invokeLater
+                onMatchingRequest(currentRequest) {
                     applySearchResult(searchResult)
                 }
             } catch (error: FuzzyFinderException) {
-                SwingUtilities.invokeLater {
-                    if (currentRequest != requestId.get()) return@invokeLater
+                onMatchingRequest(currentRequest) {
                     statusLabel.text = STATUS_ERROR
                     service.notifyError(error.message ?: STATUS_ERROR)
                 }
@@ -285,17 +283,15 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
         ApplicationManager.getApplication().executeOnPooledThread {
             try {
                 val candidates = service.streamCandidates(options) { batch, total ->
-                    SwingUtilities.invokeLater {
-                        if (currentRequest != requestId.get()) return@invokeLater
-                        if (searchField.text.isNotBlank()) return@invokeLater
+                    onMatchingRequest(currentRequest) {
+                        if (searchField.text.isNotBlank()) return@onMatchingRequest
                         streamedCandidates += batch
                         updateResults(streamedCandidates.take(INITIAL_RESULT_LIMIT))
                         statusLabel.text = "Loading files... $total found"
                     }
                 }
 
-                SwingUtilities.invokeLater {
-                    if (currentRequest != requestId.get()) return@invokeLater
+                onMatchingRequest(currentRequest) {
                     if (searchField.text.isBlank()) {
                         applySearchResult(SearchResult(candidates.size, candidates.take(INITIAL_RESULT_LIMIT)))
                     } else {
@@ -303,12 +299,18 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
                     }
                 }
             } catch (error: FuzzyFinderException) {
-                SwingUtilities.invokeLater {
-                    if (currentRequest != requestId.get()) return@invokeLater
+                onMatchingRequest(currentRequest) {
                     statusLabel.text = STATUS_ERROR
                     service.notifyError(error.message ?: STATUS_ERROR)
                 }
             }
+        }
+    }
+
+    private fun onMatchingRequest(request: Int, action: () -> Unit) {
+        SwingUtilities.invokeLater {
+            if (request != requestId.get()) return@invokeLater
+            action()
         }
     }
 

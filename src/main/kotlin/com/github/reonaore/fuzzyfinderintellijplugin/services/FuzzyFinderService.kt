@@ -54,9 +54,7 @@ class FuzzyFinderService(private val project: Project) {
             candidates.take(limit)
         } else {
             val stdout = runProcess(
-                GeneralCommandLine(settingsService.executablePath(SupportedCommand.FZF))
-                    .withParentEnvironmentType(GeneralCommandLine.ParentEnvironmentType.CONSOLE)
-                    .withParameters("--filter", query, "--scheme=path", "--read0", "--print0"),
+                fzfCommandLine(query),
                 stdin = FuzzyFinderParsers.toNulSeparatedBytes(candidates),
             )
 
@@ -105,13 +103,8 @@ class FuzzyFinderService(private val project: Project) {
     }
 
     private fun discoverCandidates(options: FdSearchOptions): List<Path> {
-        val root = resolveSearchRoot()
-            ?: throw FuzzyFinderException("Project root is unavailable.")
-
         val stdout = runProcess(
-            GeneralCommandLine(settingsService.executablePath(SupportedCommand.FD))
-                .withParentEnvironmentType(GeneralCommandLine.ParentEnvironmentType.CONSOLE)
-                .withParameters(buildFdParameters(options, root.toString())),
+            fdCommandLine(options),
         )
 
         return FuzzyFinderParsers.parseNulSeparatedPaths(stdout)
@@ -121,21 +114,8 @@ class FuzzyFinderService(private val project: Project) {
         options: FdSearchOptions,
         onBatch: (List<Path>, Int) -> Unit,
     ): List<Path> {
-        val root = resolveSearchRoot()
-            ?: throw FuzzyFinderException("Project root is unavailable.")
-
-        val commandLine = GeneralCommandLine(settingsService.executablePath(SupportedCommand.FD))
-            .withParentEnvironmentType(GeneralCommandLine.ParentEnvironmentType.CONSOLE)
-            .withParameters(buildFdParameters(options, root.toString()))
-
-        val process = try {
-            commandLine.createProcess()
-        } catch (error: IOException) {
-            throw FuzzyFinderException(
-                "Failed to launch '${commandLine.exePath}': ${error.message.orEmpty()}",
-                error,
-            )
-        }
+        val commandLine = fdCommandLine(options)
+        val process = createProcess(commandLine)
 
         val stderrReader = CompletableFuture.supplyAsync {
             process.errorStream.bufferedReader().use { it.readText() }
@@ -164,14 +144,7 @@ class FuzzyFinderService(private val project: Project) {
             throw FuzzyFinderException("Command timed out: ${commandLine.commandLineString}")
         }
 
-        val exitCode = process.exitValue()
-        val stderr = stderrReader.get()
-        if (exitCode != 0) {
-            val stderrText = stderr.ifBlank { "No error output was produced." }
-            throw FuzzyFinderException(
-                "Command failed: ${commandLine.commandLineString} (exit code $exitCode). $stderrText",
-            )
-        }
+        checkExitCode(commandLine, process.exitValue(), stderrReader.get())
 
         return paths
     }
@@ -203,14 +176,7 @@ class FuzzyFinderService(private val project: Project) {
     }
 
     private fun runProcess(commandLine: GeneralCommandLine, stdin: ByteArray? = null): ByteArray {
-        val process = try {
-            commandLine.createProcess()
-        } catch (error: IOException) {
-            throw FuzzyFinderException(
-                "Failed to launch '${commandLine.exePath}': ${error.message.orEmpty()}",
-                error,
-            )
-        }
+        val process = createProcess(commandLine)
 
         val stdoutReader = CompletableFuture.supplyAsync {
             process.inputStream.use { it.readAllBytes() }
@@ -234,18 +200,47 @@ class FuzzyFinderService(private val project: Project) {
         val stdout = stdoutReader.get()
         val stderr = stderrReader.get()
 
-        if (exitCode != 0) {
-            if (commandLine.exePath == "fzf" && exitCode == 1) {
-                return ByteArray(0)
-            }
-
-            val stderrText = stderr.ifBlank { "No error output was produced." }
-            throw FuzzyFinderException(
-                "Command failed: ${commandLine.commandLineString} (exit code $exitCode). $stderrText",
-            )
+        if (commandLine.exePath == settingsService.executablePath(SupportedCommand.FZF) && exitCode == 1) {
+            return ByteArray(0)
         }
+        checkExitCode(commandLine, exitCode, stderr)
 
         return stdout
+    }
+
+    private fun fdCommandLine(options: FdSearchOptions): GeneralCommandLine {
+        val root = resolveSearchRoot()
+            ?: throw FuzzyFinderException("Project root is unavailable.")
+
+        return GeneralCommandLine(settingsService.executablePath(SupportedCommand.FD))
+            .withParentEnvironmentType(GeneralCommandLine.ParentEnvironmentType.CONSOLE)
+            .withParameters(buildFdParameters(options, root.toString()))
+    }
+
+    private fun fzfCommandLine(query: String): GeneralCommandLine {
+        return GeneralCommandLine(settingsService.executablePath(SupportedCommand.FZF))
+            .withParentEnvironmentType(GeneralCommandLine.ParentEnvironmentType.CONSOLE)
+            .withParameters("--filter", query, "--scheme=path", "--read0", "--print0")
+    }
+
+    private fun createProcess(commandLine: GeneralCommandLine): Process {
+        return try {
+            commandLine.createProcess()
+        } catch (error: IOException) {
+            throw FuzzyFinderException(
+                "Failed to launch '${commandLine.exePath}': ${error.message.orEmpty()}",
+                error,
+            )
+        }
+    }
+
+    private fun checkExitCode(commandLine: GeneralCommandLine, exitCode: Int, stderr: String) {
+        if (exitCode == 0) return
+
+        val stderrText = stderr.ifBlank { "No error output was produced." }
+        throw FuzzyFinderException(
+            "Command failed: ${commandLine.commandLineString} (exit code $exitCode). $stderrText",
+        )
     }
 
     private companion object {
