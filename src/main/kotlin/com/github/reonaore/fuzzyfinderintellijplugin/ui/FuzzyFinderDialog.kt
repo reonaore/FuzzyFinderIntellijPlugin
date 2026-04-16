@@ -5,25 +5,16 @@ import com.github.reonaore.fuzzyfinderintellijplugin.services.FdSearchOptions
 import com.github.reonaore.fuzzyfinderintellijplugin.services.FuzzyFinderException
 import com.github.reonaore.fuzzyfinderintellijplugin.services.FuzzyFinderService
 import com.github.reonaore.fuzzyfinderintellijplugin.services.SearchResult
-import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.service
-import com.intellij.openapi.editor.Document
-import com.intellij.openapi.editor.EditorFactory
-import com.intellij.openapi.editor.ex.EditorEx
-import com.intellij.openapi.editor.highlighter.EditorHighlighterFactory
 import com.intellij.openapi.fileEditor.FileEditorManager
-import com.intellij.openapi.fileTypes.PlainTextFileType
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.ui.CollectionListModel
-import com.intellij.ui.DocumentAdapter
 import com.intellij.ui.JBSplitter
 import com.intellij.ui.ScrollPaneFactory
 import com.intellij.ui.components.JBLabel
-import com.intellij.ui.components.JBList
-import com.intellij.ui.components.JBTextField
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -34,19 +25,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import java.awt.BorderLayout
 import java.awt.Dimension
-import java.awt.event.ActionEvent
-import java.awt.event.KeyEvent
-import java.awt.event.MouseAdapter
-import java.awt.event.MouseEvent
 import java.nio.file.Path
-import javax.swing.AbstractAction
 import javax.swing.Action
-import javax.swing.DefaultListCellRenderer
 import javax.swing.JComponent
-import javax.swing.JList
 import javax.swing.JPanel
-import javax.swing.KeyStroke
-import javax.swing.ListSelectionModel
 import javax.swing.SwingUtilities
 import javax.swing.Timer
 import javax.swing.event.ListSelectionEvent
@@ -55,28 +37,39 @@ import kotlin.coroutines.resume
 class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, false) {
 
     private val service = project.service<FuzzyFinderService>()
-    private val searchField = JBTextField()
     private val optionsPanel = FuzzyFinderOptionsPanel { searchTimer.restart() }
     private val previewLoader = FuzzyFinderPreviewLoader()
     private val statusLabel = JBLabel(MyBundle.message("dialog.status.loading"))
     private val resultModel = CollectionListModel<Path>()
-    private val resultList = JBList(resultModel)
-    private val previewDocument: Document = EditorFactory.getInstance().createDocument(MyBundle.message("dialog.preview.empty"))
-    private val previewEditor = EditorFactory.getInstance().createViewer(previewDocument, project) as EditorEx
+    private val resultList = fuzzyFinderFileList(
+        resultModel,
+        project.basePath,
+        this::updatePreview,
+
+        ) { event ->
+        if (event.clickCount == 2) {
+            doOKAction()
+        }
+    }
+    private val preview = FuzzyFinderPreview(project)
     private val dialogScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val streamedCandidates = mutableListOf<Path>()
     private var searchJob: Job? = null
     private var previewJob: Job? = null
     private var searchGeneration = 0L
     private var previewGeneration = 0L
-    private val searchTimer = Timer(SEARCH_DEBOUNCE_MS) { triggerSearch() }
+    private val searchTimer = Timer(SEARCH_DEBOUNCE_MS) { triggerSearch() }.apply {
+        isRepeats = false
+    }
+    private val searchField = fuzzyFinderSearchTextField {
+        searchTimer.restart()
+    }
 
     init {
         title = MyBundle.message("dialog.title")
         setOKButtonText(MyBundle.message("dialog.open"))
         isOKActionEnabled = false
         init()
-        configureUi()
         loadCandidates()
     }
 
@@ -90,7 +83,7 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
             firstComponent = JPanel(BorderLayout()).apply {
                 add(ScrollPaneFactory.createScrollPane(resultList), BorderLayout.CENTER)
             }
-            secondComponent = createPreviewComponent()
+            secondComponent = preview.editor.component
         }
 
         return JPanel(BorderLayout(0, 8)).apply {
@@ -106,7 +99,7 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
     override fun dispose() {
         searchTimer.stop()
         dialogScope.cancel()
-        EditorFactory.getInstance().releaseEditor(previewEditor)
+        preview.dispose()
         super.dispose()
     }
 
@@ -114,101 +107,6 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
         val virtualFile = selectedVirtualFile() ?: return
         FileEditorManager.getInstance(project).openFile(virtualFile, true)
         super.doOKAction()
-    }
-
-    private fun configureUi() {
-        resultList.selectionMode = ListSelectionModel.SINGLE_SELECTION
-        resultList.cellRenderer = object : DefaultListCellRenderer() {
-            override fun getListCellRendererComponent(
-                list: JList<*>?,
-                value: Any?,
-                index: Int,
-                isSelected: Boolean,
-                cellHasFocus: Boolean,
-            ) = super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus).also {
-                val path = value as? Path ?: return@also
-                this.text = project.basePath?.let {
-                    runCatching { Path.of(it).relativize(path).toString() }.getOrDefault(path.toString())
-                } ?: path.toString()
-                toolTipText = path.toString()
-            }
-        }
-        resultList.addListSelectionListener(this::updatePreview)
-        resultList.addMouseListener(object : MouseAdapter() {
-            override fun mouseClicked(event: MouseEvent) {
-                if (event.clickCount == 2 && resultList.selectedValue != null) {
-                    doOKAction()
-                }
-            }
-        })
-
-        searchField.emptyText.text = MyBundle.message("dialog.search.placeholder")
-        searchField.document.addDocumentListener(object : DocumentAdapter() {
-            override fun textChanged(e: javax.swing.event.DocumentEvent) {
-                searchTimer.restart()
-            }
-        })
-        configureSearchNavigation()
-        configurePreviewEditor()
-
-        searchTimer.isRepeats = false
-
-        resultList.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "openSelection")
-        resultList.actionMap.put("openSelection", object : AbstractAction() {
-            override fun actionPerformed(e: ActionEvent) {
-                if (resultList.selectedValue != null) {
-                    doOKAction()
-                }
-            }
-        })
-    }
-
-    private fun createPreviewComponent(): JComponent = previewEditor.component
-
-    private fun configurePreviewEditor() {
-        previewEditor.settings.apply {
-            isLineNumbersShown = true
-            isFoldingOutlineShown = false
-            isRightMarginShown = false
-            isWhitespacesShown = false
-            isCaretRowShown = false
-            additionalColumnsCount = 1
-            additionalLinesCount = 1
-        }
-        previewEditor.setCaretEnabled(false)
-    }
-
-    private fun configureSearchNavigation() {
-        registerSearchAction("selectNextResult", KeyStroke.getKeyStroke(KeyEvent.VK_N, KeyEvent.CTRL_DOWN_MASK)) {
-            moveSelection(1)
-        }
-        registerSearchAction("selectPreviousResult", KeyStroke.getKeyStroke(KeyEvent.VK_P, KeyEvent.CTRL_DOWN_MASK)) {
-            moveSelection(-1)
-        }
-        registerSearchAction("openSelectedResult", KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0)) {
-            if (resultList.selectedValue != null) {
-                doOKAction()
-            }
-        }
-    }
-
-    private fun registerSearchAction(actionId: String, keyStroke: KeyStroke, handler: () -> Unit) {
-        searchField.inputMap.put(keyStroke, actionId)
-        searchField.actionMap.put(actionId, object : AbstractAction() {
-            override fun actionPerformed(e: ActionEvent) {
-                handler()
-            }
-        })
-    }
-
-    private fun moveSelection(delta: Int) {
-        val size = resultModel.size
-        if (size == 0) return
-
-        val currentIndex = resultList.selectedIndex.takeIf { it >= 0 } ?: 0
-        val nextIndex = (currentIndex + delta).coerceIn(0, size - 1)
-        resultList.selectedIndex = nextIndex
-        resultList.ensureIndexIsVisible(nextIndex)
     }
 
     private fun loadCandidates() {
@@ -298,7 +196,7 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
             resultList.selectedIndex = 0
         } else {
             isOKActionEnabled = false
-            updatePreviewContent(MyBundle.message("dialog.preview.empty"))
+            preview.show(PreviewContent.empty)
         }
     }
 
@@ -306,7 +204,7 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
         val selected = resultList.selectedValue ?: run {
             previewJob?.cancel()
             isOKActionEnabled = false
-            updatePreviewContent(MyBundle.message("dialog.preview.empty"))
+            preview.show(PreviewContent.empty)
             return
         }
 
@@ -321,25 +219,11 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
                     if (selected != resultList.selectedValue) return@onEdt
                     val selectedFile = previewContent.virtualFile
                     isOKActionEnabled = selectedFile != null && !selectedFile.isDirectory
-                    updatePreviewContent(previewContent.text, selectedFile)
+                    preview.show(previewContent)
                 }
             } catch (_: CancellationException) {
             }
         }
-    }
-
-    private fun updatePreviewContent(text: String, virtualFile: VirtualFile? = null) {
-        ApplicationManager.getApplication().runWriteAction {
-            previewDocument.setText(text)
-        }
-        val highlighter = if (virtualFile != null && !virtualFile.isDirectory && !virtualFile.fileType.isBinary) {
-            EditorHighlighterFactory.getInstance().createEditorHighlighter(project, virtualFile)
-        } else {
-            EditorHighlighterFactory.getInstance().createEditorHighlighter(project, PlainTextFileType.INSTANCE)
-        }
-        previewEditor.highlighter = highlighter
-        previewEditor.caretModel.moveToOffset(0)
-        previewEditor.scrollingModel.scrollVertically(0)
     }
 
     private fun selectedVirtualFile(): VirtualFile? {

@@ -62,4 +62,11 @@ class FuzzyFinderPreviewLoader {
 data class PreviewContent(
     val text: String,
     val virtualFile: VirtualFile?,
-)
+) {
+    companion object {
+        val empty = PreviewContent(
+            text = MyBundle.message("dialog.preview.empty"),
+            virtualFile = null,
+        )
+    }
+}
