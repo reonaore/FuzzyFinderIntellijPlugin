@@ -1,7 +1,8 @@
 package com.github.reonaore.fuzzyfinderintellijplugin.ui
 
 import com.github.reonaore.fuzzyfinderintellijplugin.MyBundle
-import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.readAction
+import com.intellij.openapi.application.writeAction
 import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.editor.highlighter.EditorHighlighterFactory
@@ -25,19 +26,21 @@ class FuzzyFinderPreview(
         setCaretEnabled(false)
     }
 
-    fun show(content: PreviewContent) {
+    suspend fun show(content: PreviewContent) {
         val (text, virtualFile) = content
-        ApplicationManager.getApplication().runWriteAction {
+        val highlighter = readAction {
+            if (virtualFile != null && !virtualFile.isDirectory && !virtualFile.fileType.isBinary) {
+                EditorHighlighterFactory.getInstance().createEditorHighlighter(project, virtualFile)
+            } else {
+                EditorHighlighterFactory.getInstance().createEditorHighlighter(project, PlainTextFileType.INSTANCE)
+            }
+        }
+        writeAction {
+            editor.highlighter = highlighter
+            editor.caretModel.moveToOffset(0)
+            editor.scrollingModel.scrollVertically(0)
             document.setText(text)
         }
-        val highlighter = if (virtualFile != null && !virtualFile.isDirectory && !virtualFile.fileType.isBinary) {
-            EditorHighlighterFactory.getInstance().createEditorHighlighter(project, virtualFile)
-        } else {
-            EditorHighlighterFactory.getInstance().createEditorHighlighter(project, PlainTextFileType.INSTANCE)
-        }
-        editor.highlighter = highlighter
-        editor.caretModel.moveToOffset(0)
-        editor.scrollingModel.scrollVertically(0)
     }
 
     fun dispose() {

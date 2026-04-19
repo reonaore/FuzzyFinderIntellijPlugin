@@ -1,10 +1,14 @@
 package com.github.reonaore.fuzzyfinderintellijplugin.ui
 
 import com.github.reonaore.fuzzyfinderintellijplugin.MyBundle
-import com.github.reonaore.fuzzyfinderintellijplugin.services.FdSearchOptions
 import com.github.reonaore.fuzzyfinderintellijplugin.services.FuzzyFinderException
 import com.github.reonaore.fuzzyfinderintellijplugin.services.FuzzyFinderService
 import com.github.reonaore.fuzzyfinderintellijplugin.services.SearchResult
+import com.intellij.openapi.application.EDT
+import com.intellij.openapi.application.ModalityState
+import com.intellij.openapi.application.asContextElement
+import com.intellij.openapi.application.readAction
+import com.intellij.openapi.application.writeAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.project.Project
@@ -15,24 +19,21 @@ import com.intellij.ui.CollectionListModel
 import com.intellij.ui.JBSplitter
 import com.intellij.ui.ScrollPaneFactory
 import com.intellij.ui.components.JBLabel
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import java.awt.BorderLayout
 import java.awt.Dimension
 import java.nio.file.Path
 import javax.swing.Action
 import javax.swing.JComponent
 import javax.swing.JPanel
-import javax.swing.SwingUtilities
 import javax.swing.Timer
 import javax.swing.event.ListSelectionEvent
-import kotlin.coroutines.resume
 
 class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, false) {
 
@@ -53,11 +54,8 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
     }
     private val preview = FuzzyFinderPreview(project)
     private val dialogScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    private val streamedCandidates = mutableListOf<Path>()
     private var searchJob: Job? = null
     private var previewJob: Job? = null
-    private var searchGeneration = 0L
-    private var previewGeneration = 0L
     private val searchTimer = Timer(SEARCH_DEBOUNCE_MS) { triggerSearch() }.apply {
         isRepeats = false
     }
@@ -69,8 +67,8 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
         title = MyBundle.message("dialog.title")
         setOKButtonText(MyBundle.message("dialog.open"))
         isOKActionEnabled = false
+        searchTimer.start()
         init()
-        loadCandidates()
     }
 
     override fun createCenterPanel(): JComponent {
@@ -109,120 +107,58 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
         super.doOKAction()
     }
 
-    private fun loadCandidates() {
-        triggerSearch()
-    }
-
     private fun triggerSearch() {
-        val generation = ++searchGeneration
+        searchJob?.cancel()
         val query = searchField.text
         val options = optionsPanel.currentOptions()
-        val cachedCandidates = service.getCachedCandidates(options)
-        searchJob?.cancel()
-
-        if (query.isBlank() && cachedCandidates == null) {
-            startStreamingLoad(options, generation)
-            return
-        }
-
         statusLabel.text = MyBundle.message("dialog.status.searching")
 
-        searchJob = dialogScope.launch {
-            try {
-                val searchResult = service.search(query, options)
-                onEdt {
-                    if (generation != searchGeneration) return@onEdt
-                    applySearchResult(searchResult)
-                }
-            } catch (_: CancellationException) {
-            } catch (error: FuzzyFinderException) {
-                onEdt {
-                    if (generation != searchGeneration) return@onEdt
-                    statusLabel.text = MyBundle.message("dialog.status.error")
-                    service.notifyError(error.message ?: MyBundle.message("dialog.status.error"))
+        searchJob = dialogScope.launch(ModalityState.defaultModalityState().asContextElement()) {
+            val res = service.search(query, options)
+            applySearchResult(res)
+        }.also {
+            it.invokeOnCompletion { e ->
+                if (e is FuzzyFinderException) {
+                    dialogScope.launch(Dispatchers.EDT) {
+                        statusLabel.text = MyBundle.message("dialog.status.error")
+                        service.notifyError(e.message ?: MyBundle.message("dialog.status.error"))
+                    }
                 }
             }
         }
     }
 
-    private fun startStreamingLoad(options: FdSearchOptions, generation: Long) {
-        streamedCandidates.clear()
-        updateResults(emptyList())
-        statusLabel.text = MyBundle.message("dialog.status.loading")
-
-        searchJob = dialogScope.launch {
-            try {
-                val candidates = service.streamCandidates(options) { batch, total ->
-                    onEdt {
-                        if (generation != searchGeneration) return@onEdt
-                        if (searchField.text.isNotBlank()) return@onEdt
-                        streamedCandidates += batch
-                        updateResults(streamedCandidates.take(INITIAL_RESULT_LIMIT))
-                        statusLabel.text = MyBundle.message("dialog.status.loadingProgress", total)
-                    }
-                }
-
-                onEdt {
-                    if (generation != searchGeneration) return@onEdt
-                    if (searchField.text.isBlank()) {
-                        applySearchResult(SearchResult(candidates.size, candidates.take(INITIAL_RESULT_LIMIT)))
-                    } else {
-                        triggerSearch()
-                    }
-                }
-            } catch (_: CancellationException) {
-            } catch (error: FuzzyFinderException) {
-                onEdt {
-                    if (generation != searchGeneration) return@onEdt
-                    statusLabel.text = MyBundle.message("dialog.status.error")
-                    service.notifyError(error.message ?: MyBundle.message("dialog.status.error"))
-                }
+    private suspend fun applySearchResult(searchResult: SearchResult) {
+        val paths = searchResult.results
+        withContext(Dispatchers.EDT) {
+            resultModel.replaceAll(paths)
+            statusLabel.text = MyBundle.message(
+                "dialog.status.resultsDetailed",
+                paths.size,
+                searchResult.totalCandidates,
+            )
+            if (paths.isNotEmpty()) {
+                resultList.selectedIndex = 0
+            } else {
+                isOKActionEnabled = false
             }
         }
+        updatePreview()
     }
 
-    private fun applySearchResult(searchResult: SearchResult) {
-        updateResults(searchResult.results)
-        statusLabel.text = MyBundle.message(
-            "dialog.status.resultsDetailed",
-            searchResult.results.size,
-            searchResult.totalCandidates,
-        )
-    }
-
-    private fun updateResults(paths: List<Path>) {
-        resultModel.replaceAll(paths)
-        if (paths.isNotEmpty()) {
-            resultList.selectedIndex = 0
-        } else {
-            isOKActionEnabled = false
-            preview.show(PreviewContent.empty)
-        }
-    }
-
-    private fun updatePreview(@Suppress("UNUSED_PARAMETER") event: ListSelectionEvent) {
-        val selected = resultList.selectedValue ?: run {
-            previewJob?.cancel()
-            isOKActionEnabled = false
-            preview.show(PreviewContent.empty)
-            return
-        }
-
-        isOKActionEnabled = false
-        val generation = ++previewGeneration
+    private fun updatePreview(@Suppress("UNUSED_PARAMETER") event: ListSelectionEvent? = null) {
         previewJob?.cancel()
-        previewJob = dialogScope.launch {
-            try {
-                val previewContent = previewLoader.load(selected)
-                onEdt {
-                    if (generation != previewGeneration) return@onEdt
-                    if (selected != resultList.selectedValue) return@onEdt
-                    val selectedFile = previewContent.virtualFile
-                    isOKActionEnabled = selectedFile != null && !selectedFile.isDirectory
-                    preview.show(previewContent)
-                }
-            } catch (_: CancellationException) {
+        previewJob = dialogScope.launch(ModalityState.defaultModalityState().asContextElement()) {
+            val selected = readAction {
+                resultList.selectedValue
+            } ?: run {
+                writeAction { isOKActionEnabled = false }
+                preview.show(PreviewContent.empty)
+                return@launch
             }
+            writeAction { isOKActionEnabled = true }
+            val previewContent = previewLoader.load(selected)
+            preview.show(previewContent)
         }
     }
 
@@ -233,18 +169,7 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
         return virtualFile
     }
 
-    private suspend fun onEdt(action: () -> Unit) {
-        suspendCancellableCoroutine { continuation ->
-            SwingUtilities.invokeLater {
-                if (!continuation.isActive) return@invokeLater
-                action()
-                continuation.resume(Unit)
-            }
-        }
-    }
-
     private companion object {
         const val SEARCH_DEBOUNCE_MS = 180
-        const val INITIAL_RESULT_LIMIT = 200
     }
 }
