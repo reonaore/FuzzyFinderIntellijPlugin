@@ -28,10 +28,14 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.awt.BorderLayout
 import java.awt.Dimension
+import java.awt.event.ActionEvent
+import java.awt.event.KeyEvent
 import java.nio.file.Path
+import javax.swing.AbstractAction
 import javax.swing.Action
 import javax.swing.JComponent
 import javax.swing.JPanel
+import javax.swing.KeyStroke
 import javax.swing.Timer
 import javax.swing.event.ListSelectionEvent
 
@@ -89,7 +93,16 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
             add(controlsPanel, BorderLayout.NORTH)
             add(splitter, BorderLayout.CENTER)
             add(statusLabel, BorderLayout.SOUTH)
+            installCandidateNavigationShortcuts(this)
+            installCandidateNavigationShortcuts(searchField)
+            installCandidateNavigationShortcuts(searchField.textEditor)
+            installCandidateNavigationShortcuts(searchField.textEditor, JComponent.WHEN_FOCUSED)
         }
+    }
+
+    override fun init() {
+        super.init()
+        rootPane?.let { installCandidateNavigationShortcuts(it, JComponent.WHEN_IN_FOCUSED_WINDOW) }
     }
 
     override fun createActions(): Array<Action> = arrayOf(okAction, cancelAction)
@@ -169,7 +182,43 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
         return virtualFile
     }
 
+    private fun installCandidateNavigationShortcuts(
+        component: JComponent,
+        focusCondition: Int = JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT,
+    ) {
+        val inputMap = component.getInputMap(focusCondition)
+        val actionMap = component.actionMap
+
+        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_N, KeyEvent.CTRL_DOWN_MASK), ACTION_SELECT_NEXT)
+        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_P, KeyEvent.CTRL_DOWN_MASK), ACTION_SELECT_PREVIOUS)
+
+        actionMap.put(ACTION_SELECT_NEXT, object : AbstractAction() {
+            override fun actionPerformed(event: ActionEvent?) {
+                moveSelectionBy(1)
+            }
+        })
+        actionMap.put(ACTION_SELECT_PREVIOUS, object : AbstractAction() {
+            override fun actionPerformed(event: ActionEvent?) {
+                moveSelectionBy(-1)
+            }
+        })
+    }
+
+    private fun moveSelectionBy(offset: Int) {
+        val lastIndex = resultModel.size - 1
+        if (lastIndex < 0) return
+
+        val currentIndex = resultList.selectedIndex.takeIf { it >= 0 } ?: 0
+        val nextIndex = (currentIndex + offset).coerceIn(0, lastIndex)
+        if (nextIndex == resultList.selectedIndex) return
+
+        resultList.selectedIndex = nextIndex
+        resultList.ensureIndexIsVisible(nextIndex)
+    }
+
     private companion object {
+        const val ACTION_SELECT_NEXT = "fuzzyFinder.selectNextCandidate"
+        const val ACTION_SELECT_PREVIOUS = "fuzzyFinder.selectPreviousCandidate"
         const val SEARCH_DEBOUNCE_MS = 180
     }
 }
