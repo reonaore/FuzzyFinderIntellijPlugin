@@ -59,7 +59,7 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
     private val searchTimer = Timer(SEARCH_DEBOUNCE_MS) { triggerSearch() }.apply {
         isRepeats = false
     }
-    private val searchField = fuzzyFinderSearchTextField {
+    private val searchField = fuzzyFinderSearchTextField(placeHolderText = "Search") {
         searchTimer.restart()
     }
 
