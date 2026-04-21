@@ -1,7 +1,7 @@
 <!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
 <idea-plugin>
     <id>com.github.reonaore.fuzzyfinderintellijplugin</id>
-    <name>FuzzyFinderIntellijPlugin</name>
+    <name>Fuzzy Finder</name>
     <vendor>reonaore</vendor>
 
     <depends>com.intellij.modules.platform</depends>
@@ -9,7 +9,21 @@
     <resource-bundle>messages.MyBundle</resource-bundle>
 
     <extensions defaultExtensionNs="com.intellij">
-        <toolWindow factoryClass="com.github.reonaore.fuzzyfinderintellijplugin.toolWindow.MyToolWindowFactory" id="MyToolWindow"/>
-        <postStartupActivity implementation="com.github.reonaore.fuzzyfinderintellijplugin.startup.MyProjectActivity" />
+        <notificationGroup id="Fuzzy Finder Notifications" displayType="BALLOON" />
+        <applicationConfigurable
+                parentId="tools"
+                instance="com.github.reonaore.fuzzyfinderintellijplugin.settings.FuzzyFinderSettingsConfigurable"
+                id="com.github.reonaore.fuzzyfinderintellijplugin.settings"
+                displayName="Fuzzy Finder" />
     </extensions>
+
+    <actions>
+        <action
+                id="com.github.reonaore.fuzzyfinderintellijplugin.actions.OpenFuzzyFinderAction"
+                class="com.github.reonaore.fuzzyfinderintellijplugin.actions.OpenFuzzyFinderAction"
+                text="Open Fuzzy Finder"
+                description="Search project files with fd and fzf">
+            <add-to-group group-id="ToolsMenu" anchor="last" />
+        </action>
+    </actions>
 </idea-plugin>
