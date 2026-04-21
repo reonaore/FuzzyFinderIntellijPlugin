@@ -28,10 +28,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.awt.BorderLayout
 import java.awt.Dimension
-import java.nio.file.Path
+import java.awt.event.ActionEvent
+import java.awt.event.KeyEvent
+import javax.swing.AbstractAction
 import javax.swing.Action
 import javax.swing.JComponent
 import javax.swing.JPanel
+import javax.swing.KeyStroke
 import javax.swing.Timer
 import javax.swing.event.ListSelectionEvent
 
@@ -41,13 +44,11 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
     private val optionsPanel = FuzzyFinderOptionsPanel { searchTimer.restart() }
     private val previewLoader = FuzzyFinderPreviewLoader()
     private val statusLabel = JBLabel(MyBundle.message("dialog.status.loading"))
-    private val resultModel = CollectionListModel<Path>()
+    private val resultModel = CollectionListModel<FileListItem>()
     private val resultList = fuzzyFinderFileList(
         resultModel,
-        project.basePath,
         this::updatePreview,
-
-        ) { event ->
+    ) { event ->
         if (event.clickCount == 2) {
             doOKAction()
         }
@@ -89,7 +90,16 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
             add(controlsPanel, BorderLayout.NORTH)
             add(splitter, BorderLayout.CENTER)
             add(statusLabel, BorderLayout.SOUTH)
+            installCandidateNavigationShortcuts(this)
+            installCandidateNavigationShortcuts(searchField)
+            installCandidateNavigationShortcuts(searchField.textEditor)
+            installCandidateNavigationShortcuts(searchField.textEditor, JComponent.WHEN_FOCUSED)
         }
+    }
+
+    override fun init() {
+        super.init()
+        rootPane?.let { installCandidateNavigationShortcuts(it, JComponent.WHEN_IN_FOCUSED_WINDOW) }
     }
 
     override fun createActions(): Array<Action> = arrayOf(okAction, cancelAction)
@@ -130,8 +140,11 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
 
     private suspend fun applySearchResult(searchResult: SearchResult) {
         val paths = searchResult.results
+        val items = paths.map { path ->
+            path.toFileListItem(project.basePath, searchResult.query)
+        }
         withContext(Dispatchers.EDT) {
-            resultModel.replaceAll(paths)
+            resultModel.replaceAll(items)
             statusLabel.text = MyBundle.message(
                 "dialog.status.resultsDetailed",
                 paths.size,
@@ -150,7 +163,7 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
         previewJob?.cancel()
         previewJob = dialogScope.launch(ModalityState.defaultModalityState().asContextElement()) {
             val selected = readAction {
-                resultList.selectedValue
+                resultList.selectedValue?.path
             } ?: run {
                 writeAction { isOKActionEnabled = false }
                 preview.show(PreviewContent.empty)
@@ -163,13 +176,70 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
     }
 
     private fun selectedVirtualFile(): VirtualFile? {
-        val selected = resultList.selectedValue ?: return null
+        val selected = resultList.selectedValue?.path ?: return null
         val virtualFile = LocalFileSystem.getInstance().findFileByNioFile(selected) ?: return null
         if (virtualFile.isDirectory) return null
         return virtualFile
     }
 
+    private fun installCandidateNavigationShortcuts(
+        component: JComponent,
+        focusCondition: Int = JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT,
+    ) {
+        val inputMap = component.getInputMap(focusCondition)
+        val actionMap = component.actionMap
+
+        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_N, KeyEvent.CTRL_DOWN_MASK), ACTION_SELECT_NEXT)
+        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_P, KeyEvent.CTRL_DOWN_MASK), ACTION_SELECT_PREVIOUS)
+        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_H, KeyEvent.ALT_DOWN_MASK), ACTION_TOGGLE_INCLUDE_HIDDEN)
+        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_S, KeyEvent.ALT_DOWN_MASK), ACTION_TOGGLE_FOLLOW_SYMLINKS)
+        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_G, KeyEvent.ALT_DOWN_MASK), ACTION_TOGGLE_RESPECT_GITIGNORE)
+
+        actionMap.put(ACTION_SELECT_NEXT, object : AbstractAction() {
+            override fun actionPerformed(event: ActionEvent?) {
+                moveSelectionBy(1)
+            }
+        })
+        actionMap.put(ACTION_SELECT_PREVIOUS, object : AbstractAction() {
+            override fun actionPerformed(event: ActionEvent?) {
+                moveSelectionBy(-1)
+            }
+        })
+        actionMap.put(ACTION_TOGGLE_INCLUDE_HIDDEN, object : AbstractAction() {
+            override fun actionPerformed(event: ActionEvent?) {
+                optionsPanel.toggleIncludeHidden()
+            }
+        })
+        actionMap.put(ACTION_TOGGLE_FOLLOW_SYMLINKS, object : AbstractAction() {
+            override fun actionPerformed(event: ActionEvent?) {
+                optionsPanel.toggleFollowSymlinks()
+            }
+        })
+        actionMap.put(ACTION_TOGGLE_RESPECT_GITIGNORE, object : AbstractAction() {
+            override fun actionPerformed(event: ActionEvent?) {
+                optionsPanel.toggleRespectGitIgnore()
+            }
+        })
+    }
+
+    private fun moveSelectionBy(offset: Int) {
+        val lastIndex = resultModel.size - 1
+        if (lastIndex < 0) return
+
+        val currentIndex = resultList.selectedIndex.takeIf { it >= 0 } ?: 0
+        val nextIndex = (currentIndex + offset).coerceIn(0, lastIndex)
+        if (nextIndex == resultList.selectedIndex) return
+
+        resultList.selectedIndex = nextIndex
+        resultList.ensureIndexIsVisible(nextIndex)
+    }
+
     private companion object {
+        const val ACTION_SELECT_NEXT = "fuzzyFinder.selectNextCandidate"
+        const val ACTION_SELECT_PREVIOUS = "fuzzyFinder.selectPreviousCandidate"
+        const val ACTION_TOGGLE_INCLUDE_HIDDEN = "fuzzyFinder.toggleIncludeHidden"
+        const val ACTION_TOGGLE_FOLLOW_SYMLINKS = "fuzzyFinder.toggleFollowSymlinks"
+        const val ACTION_TOGGLE_RESPECT_GITIGNORE = "fuzzyFinder.toggleRespectGitIgnore"
         const val SEARCH_DEBOUNCE_MS = 180
     }
 }
