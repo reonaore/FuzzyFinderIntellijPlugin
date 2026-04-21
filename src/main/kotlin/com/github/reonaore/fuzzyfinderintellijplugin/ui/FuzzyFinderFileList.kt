@@ -1,15 +1,34 @@
 package com.github.reonaore.fuzzyfinderintellijplugin.ui
 
+import com.intellij.icons.AllIcons
+import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.ui.CollectionListModel
-import com.intellij.ui.components.JBLabel
+import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.components.JBList
+import com.intellij.util.ui.JBUI
+import com.intellij.util.ui.UIUtil
+import java.awt.BorderLayout
+import java.awt.FlowLayout
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import java.nio.file.Path
+import javax.swing.Icon
+import javax.swing.JLabel
+import javax.swing.JList
+import javax.swing.ListCellRenderer
 import javax.swing.ListSelectionModel
+import javax.swing.JPanel
 import javax.swing.event.ListSelectionEvent
 
-typealias PathList = CollectionListModel<Path>
+typealias PathList = CollectionListModel<FileListItem>
+
+data class FileListItem(
+    val path: Path,
+    val fileName: String,
+    val secondaryPath: String?,
+    val highlightIndexes: Set<Int>,
+    val icon: Icon,
+)
 
 fun Path.relativePathFrom(basePath: String?): String {
     if (basePath == null) {
@@ -20,17 +39,71 @@ fun Path.relativePathFrom(basePath: String?): String {
         .toString()
 }
 
+fun Path.toFileListItem(basePath: String?, query: String): FileListItem {
+    val relativePath = relativePathFrom(basePath)
+    val fileName = fileName?.toString().orEmpty().ifBlank { relativePath }
+    val secondaryPath = relativeParentPath(basePath)
+
+    return FileListItem(
+        path = this,
+        fileName = fileName,
+        secondaryPath = secondaryPath,
+        highlightIndexes = fuzzyMatchIndexes(fileName, query).toSet(),
+        icon = fileIcon(),
+    )
+}
+
+internal fun Path.relativeParentPath(basePath: String?): String? {
+    val relativePath = relativePathFrom(basePath)
+    val separatorIndex = relativePath.lastIndexOfAny(charArrayOf('/', '\\'))
+    return relativePath
+        .takeIf { separatorIndex >= 0 }
+        ?.substring(0, separatorIndex)
+        ?.ifBlank { null }
+}
+
+internal fun Path.fileIcon(): Icon {
+    if (toFile().isDirectory) {
+        return AllIcons.Nodes.Folder
+    }
+    val fileName = fileName?.toString().orEmpty()
+    return FileTypeManager.getInstance().getFileTypeByFileName(fileName).icon ?: AllIcons.FileTypes.Any_type
+}
+
+internal fun fuzzyMatchIndexes(text: String, query: String): List<Int> {
+    if (text.isEmpty()) return emptyList()
+
+    val normalizedQuery = query.filterNot(Char::isWhitespace)
+    if (normalizedQuery.isEmpty()) return emptyList()
+
+    val matches = mutableListOf<Int>()
+    var textIndex = 0
+    for (queryChar in normalizedQuery) {
+        var matched = false
+        while (textIndex < text.length) {
+            if (text[textIndex].equals(queryChar, ignoreCase = true)) {
+                matches += textIndex
+                textIndex++
+                matched = true
+                break
+            }
+            textIndex++
+        }
+        if (!matched) {
+            return emptyList()
+        }
+    }
+    return matches
+}
+
 fun fuzzyFinderFileList(
     data: PathList = PathList(),
-    basePath: String? = null,
     onCellSelected: ((ListSelectionEvent) -> Unit)? = null,
     onCellClicked: ((MouseEvent) -> Unit)? = null,
-): JBList<Path> {
+): JBList<FileListItem> {
     val component = JBList(data).apply {
         selectionMode = ListSelectionModel.SINGLE_SELECTION
-        installCellRenderer { path ->
-            JBLabel(path.relativePathFrom(basePath))
-        }
+        cellRenderer = FileListItemRenderer()
         onCellSelected?.let {
             addListSelectionListener(it)
         }
@@ -41,4 +114,78 @@ fun fuzzyFinderFileList(
         }
     }
     return component
+}
+
+private class FileListItemRenderer : ListCellRenderer<FileListItem> {
+    private val panel = JPanel(BorderLayout(JBUI.scale(8), 0))
+    private val iconLabel = JLabel()
+    private val textPanel = JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(6), 0))
+    private val fileNameLabel = HighlightedNameComponent()
+    private val secondaryPathLabel = JLabel()
+
+    init {
+        textPanel.isOpaque = false
+        panel.border = JBUI.Borders.empty(2, 6)
+        panel.add(iconLabel, BorderLayout.WEST)
+        panel.add(textPanel, BorderLayout.CENTER)
+        textPanel.add(fileNameLabel)
+        textPanel.add(secondaryPathLabel)
+    }
+
+    override fun getListCellRendererComponent(
+        list: JList<out FileListItem>,
+        value: FileListItem,
+        index: Int,
+        isSelected: Boolean,
+        cellHasFocus: Boolean,
+    ): JPanel {
+        val background = if (isSelected) list.selectionBackground else list.background
+        val primaryForeground = if (isSelected) list.selectionForeground else list.foreground
+        val secondaryForeground = if (isSelected) list.selectionForeground else UIUtil.getContextHelpForeground()
+
+        panel.isOpaque = true
+        panel.background = background
+
+        iconLabel.icon = value.icon
+        secondaryPathLabel.text = value.secondaryPath?.let { " $it" }.orEmpty()
+        secondaryPathLabel.foreground = secondaryForeground
+        secondaryPathLabel.isVisible = value.secondaryPath != null
+
+        iconLabel.isOpaque = false
+        iconLabel.background = background
+        textPanel.background = background
+        textPanel.isOpaque = false
+        secondaryPathLabel.background = background
+        secondaryPathLabel.isOpaque = false
+        fileNameLabel.foreground = primaryForeground
+        fileNameLabel.background = background
+        fileNameLabel.applyHighlight(value.fileName, value.highlightIndexes, primaryForeground)
+        return panel
+    }
+}
+
+private class HighlightedNameComponent : com.intellij.ui.SimpleColoredComponent() {
+    fun applyHighlight(text: String, highlightIndexes: Set<Int>, foregroundColor: java.awt.Color) {
+        clear()
+        val plain = SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, foregroundColor)
+        val highlighted = SimpleTextAttributes(SimpleTextAttributes.STYLE_SEARCH_MATCH, foregroundColor)
+
+        if (highlightIndexes.isEmpty()) {
+            append(text, plain)
+            return
+        }
+
+        val sortedIndexes = highlightIndexes.sorted()
+        var start = 0
+        sortedIndexes.forEach { index ->
+            if (index > start) {
+                append(text.substring(start, index), plain)
+            }
+            append(text[index].toString(), highlighted)
+            start = index + 1
+        }
+        if (start < text.length) {
+            append(text.substring(start), plain)
+        }
+    }
 }

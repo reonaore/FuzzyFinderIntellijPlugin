@@ -44,7 +44,7 @@ class FuzzyFinderService(
         val totalCount = FuzzyFinderParsers.parseNulSeparatedPaths(candidates).size
         val results = FuzzyFinderParsers.parseNulSeparatedPaths(stdout).take(limit)
 
-        return SearchResult(totalCandidates = totalCount, results = results)
+        return SearchResult(totalCandidates = totalCount, query = query, results = results)
     }
 
     fun notifyError(message: String) {
@@ -140,6 +140,7 @@ class FuzzyFinderException(message: String, cause: Throwable? = null) : RuntimeE
 
 data class SearchResult(
     val totalCandidates: Int,
+    val query: String,
     val results: List<Path>,
 )
 

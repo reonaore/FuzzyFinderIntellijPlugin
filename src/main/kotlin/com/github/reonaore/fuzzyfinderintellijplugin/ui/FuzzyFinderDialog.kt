@@ -30,7 +30,6 @@ import java.awt.BorderLayout
 import java.awt.Dimension
 import java.awt.event.ActionEvent
 import java.awt.event.KeyEvent
-import java.nio.file.Path
 import javax.swing.AbstractAction
 import javax.swing.Action
 import javax.swing.JComponent
@@ -45,13 +44,11 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
     private val optionsPanel = FuzzyFinderOptionsPanel { searchTimer.restart() }
     private val previewLoader = FuzzyFinderPreviewLoader()
     private val statusLabel = JBLabel(MyBundle.message("dialog.status.loading"))
-    private val resultModel = CollectionListModel<Path>()
+    private val resultModel = CollectionListModel<FileListItem>()
     private val resultList = fuzzyFinderFileList(
         resultModel,
-        project.basePath,
         this::updatePreview,
-
-        ) { event ->
+    ) { event ->
         if (event.clickCount == 2) {
             doOKAction()
         }
@@ -143,8 +140,11 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
 
     private suspend fun applySearchResult(searchResult: SearchResult) {
         val paths = searchResult.results
+        val items = paths.map { path ->
+            path.toFileListItem(project.basePath, searchResult.query)
+        }
         withContext(Dispatchers.EDT) {
-            resultModel.replaceAll(paths)
+            resultModel.replaceAll(items)
             statusLabel.text = MyBundle.message(
                 "dialog.status.resultsDetailed",
                 paths.size,
@@ -163,7 +163,7 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
         previewJob?.cancel()
         previewJob = dialogScope.launch(ModalityState.defaultModalityState().asContextElement()) {
             val selected = readAction {
-                resultList.selectedValue
+                resultList.selectedValue?.path
             } ?: run {
                 writeAction { isOKActionEnabled = false }
                 preview.show(PreviewContent.empty)
@@ -176,7 +176,7 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
     }
 
     private fun selectedVirtualFile(): VirtualFile? {
-        val selected = resultList.selectedValue ?: return null
+        val selected = resultList.selectedValue?.path ?: return null
         val virtualFile = LocalFileSystem.getInstance().findFileByNioFile(selected) ?: return null
         if (virtualFile.isDirectory) return null
         return virtualFile
