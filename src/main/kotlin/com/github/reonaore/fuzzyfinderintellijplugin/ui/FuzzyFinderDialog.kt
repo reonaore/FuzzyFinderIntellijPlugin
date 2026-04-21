@@ -191,6 +191,9 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
 
         inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_N, KeyEvent.CTRL_DOWN_MASK), ACTION_SELECT_NEXT)
         inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_P, KeyEvent.CTRL_DOWN_MASK), ACTION_SELECT_PREVIOUS)
+        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_H, KeyEvent.ALT_DOWN_MASK), ACTION_TOGGLE_INCLUDE_HIDDEN)
+        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_S, KeyEvent.ALT_DOWN_MASK), ACTION_TOGGLE_FOLLOW_SYMLINKS)
+        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_G, KeyEvent.ALT_DOWN_MASK), ACTION_TOGGLE_RESPECT_GITIGNORE)
 
         actionMap.put(ACTION_SELECT_NEXT, object : AbstractAction() {
             override fun actionPerformed(event: ActionEvent?) {
@@ -200,6 +203,21 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
         actionMap.put(ACTION_SELECT_PREVIOUS, object : AbstractAction() {
             override fun actionPerformed(event: ActionEvent?) {
                 moveSelectionBy(-1)
+            }
+        })
+        actionMap.put(ACTION_TOGGLE_INCLUDE_HIDDEN, object : AbstractAction() {
+            override fun actionPerformed(event: ActionEvent?) {
+                optionsPanel.toggleIncludeHidden()
+            }
+        })
+        actionMap.put(ACTION_TOGGLE_FOLLOW_SYMLINKS, object : AbstractAction() {
+            override fun actionPerformed(event: ActionEvent?) {
+                optionsPanel.toggleFollowSymlinks()
+            }
+        })
+        actionMap.put(ACTION_TOGGLE_RESPECT_GITIGNORE, object : AbstractAction() {
+            override fun actionPerformed(event: ActionEvent?) {
+                optionsPanel.toggleRespectGitIgnore()
             }
         })
     }
@@ -219,6 +237,9 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
     private companion object {
         const val ACTION_SELECT_NEXT = "fuzzyFinder.selectNextCandidate"
         const val ACTION_SELECT_PREVIOUS = "fuzzyFinder.selectPreviousCandidate"
+        const val ACTION_TOGGLE_INCLUDE_HIDDEN = "fuzzyFinder.toggleIncludeHidden"
+        const val ACTION_TOGGLE_FOLLOW_SYMLINKS = "fuzzyFinder.toggleFollowSymlinks"
+        const val ACTION_TOGGLE_RESPECT_GITIGNORE = "fuzzyFinder.toggleRespectGitIgnore"
         const val SEARCH_DEBOUNCE_MS = 180
     }
 }
