@@ -96,6 +96,29 @@ internal fun fuzzyMatchIndexes(text: String, query: String): List<Int> {
     return matches
 }
 
+internal fun contiguousHighlightRanges(highlightIndexes: Set<Int>): List<IntRange> {
+    if (highlightIndexes.isEmpty()) return emptyList()
+
+    val sortedIndexes = highlightIndexes.sorted()
+    val ranges = mutableListOf<IntRange>()
+    var rangeStart = sortedIndexes.first()
+    var previousIndex = rangeStart
+
+    for (index in sortedIndexes.drop(1)) {
+        if (index == previousIndex + 1) {
+            previousIndex = index
+            continue
+        }
+
+        ranges += rangeStart..previousIndex
+        rangeStart = index
+        previousIndex = index
+    }
+
+    ranges += rangeStart..previousIndex
+    return ranges
+}
+
 fun fuzzyFinderFileList(
     data: PathList = PathList(),
     onCellSelected: ((ListSelectionEvent) -> Unit)? = null,
@@ -175,14 +198,13 @@ private class HighlightedNameComponent : com.intellij.ui.SimpleColoredComponent(
             return
         }
 
-        val sortedIndexes = highlightIndexes.sorted()
         var start = 0
-        sortedIndexes.forEach { index ->
-            if (index > start) {
-                append(text.substring(start, index), plain)
+        contiguousHighlightRanges(highlightIndexes).forEach { range ->
+            if (range.first > start) {
+                append(text.substring(start, range.first), plain)
             }
-            append(text[index].toString(), highlighted)
-            start = index + 1
+            append(text.substring(range.first, range.last + 1), highlighted)
+            start = range.last + 1
         }
         if (start < text.length) {
             append(text.substring(start), plain)

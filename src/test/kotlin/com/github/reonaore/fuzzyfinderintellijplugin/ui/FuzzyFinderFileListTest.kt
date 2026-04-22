@@ -42,4 +42,17 @@ class FuzzyFinderFileListTest {
     fun ignoresWhitespaceInQueryWhenHighlighting() {
         assertEquals(listOf(0, 1), fuzzyMatchIndexes("App.kt", "a p"))
     }
+
+    @Test
+    fun groupsContiguousHighlightIndexesIntoSingleRanges() {
+        assertEquals(
+            listOf(0..2, 5..6, 9..9),
+            contiguousHighlightRanges(setOf(0, 1, 2, 5, 6, 9)),
+        )
+    }
+
+    @Test
+    fun returnsEmptyRangesWhenThereAreNoHighlights() {
+        assertEquals(emptyList<IntRange>(), contiguousHighlightRanges(emptySet()))
+    }
 }
