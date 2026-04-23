@@ -15,11 +15,14 @@ The plugin opens a modeless dialog with:
 - a live file preview pane with syntax highlighting
 - filters for file type, hidden files, symlink handling, and ignore rules
 - configurable executable paths for `fd` and `fzf`
+- project-root aware search scoped to IntelliJ content roots
+
+![Fuzzy Finder search dialog](assets/fuzzy-file-finder-preview.png)
 <!-- Plugin description end -->
 
 ## Requirements
 
-- IntelliJ Platform 2025.2+
+- IntelliJ IDEA 2026.1 or newer
 - `fd` available on `PATH`, or configured in Settings
 - `fzf` available on `PATH`, or configured in Settings
 
@@ -34,6 +37,17 @@ The dialog supports:
 - double-click or `Enter` to open the selected file
 
 Executable paths can be configured in `Settings | Tools | Fuzzy Finder`.
+
+## Feature Overview
+
+- Find project files quickly with `fd` and rank matches with `fzf --filter`
+- Preview the current selection without leaving the dialog
+- Narrow results with hidden-file, symlink, ignore-rule, and entry-type options
+- Point the plugin to custom `fd` and `fzf` executables when they are not on `PATH`
+- Search only within the current project's IntelliJ content roots
+
+The initial public release is intended for local projects that already use `fd` and `fzf`.
+The plugin does not bundle either executable and expects them to be installed separately.
 
 ## Installation
 
