@@ -6,24 +6,24 @@ A checklist for the first JetBrains Marketplace release and the follow-up releas
 
 - [x] Set the plugin name, plugin group, and plugin id to project-specific values
 - [x] Add a plugin description section to `README.md`
-- [ ] Align the requirements section in `README.md` with the actual supported versions
-- [ ] Review the installation instructions and decide whether screenshots are needed in `README.md`
-- [ ] Finalize the public description, feature list, and usage expectations for the Marketplace page
-- [ ] Review the vendor, action description, and settings display name in `plugin.xml` for publication
+- [x] Align the requirements section in `README.md` with the actual supported versions
+- [x] Review the installation instructions and decide whether screenshots are needed in `README.md`
+- [x] Finalize the public description, feature list, and usage expectations for the Marketplace page
+- [x] Review the vendor, action description, and settings display name in `plugin.xml` for publication
 
 ## 2. Release Scope
 
-- [ ] Update `pluginVersion` in `gradle.properties` to the first public release version
-- [ ] Refine the `Unreleased` section in `CHANGELOG.md` to match the release contents
-- [ ] Decide whether the first release should be a pre-release or a stable release
+- [x] Update `pluginVersion` in `gradle.properties` to the first public release version
+- [x] Refine the `Unreleased` section in `CHANGELOG.md` to match the release contents
+- [x] Decide whether the first release should be a pre-release or a stable release
 - [ ] Prepare Marketplace icons or promotional images if needed
 
 ## 3. Quality Checks
 
-- [ ] Run `./gradlew check`
-- [ ] Run `./gradlew verifyPlugin`
-- [ ] Confirm that `./gradlew buildPlugin` generates the ZIP artifact successfully
-- [ ] Perform manual verification with `./gradlew runIde`
+- [x] Run `./gradlew check`
+- [x] Run `./gradlew verifyPlugin`
+- [x] Confirm that `./gradlew buildPlugin` generates the ZIP artifact successfully
+- [x] Perform manual verification with `./gradlew runIde`
 - [ ] Verify the behavior and settings UI when `fd` or `fzf` is not installed
 - [ ] Run basic smoke tests on the IDEs you intend to support
 

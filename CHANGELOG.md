@@ -3,6 +3,8 @@
 # FuzzyFinderIntellijPlugin Changelog
 
 ## [Unreleased]
+
+## [0.1.0] - 2026-04-23
 ### Added
 - File search dialog powered by `fd` candidate discovery and `fzf --filter`
 - Live preview pane with syntax highlighting for text files
