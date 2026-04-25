@@ -1,8 +1,8 @@
 # FuzzyFinderIntellijPlugin
 
 ![Build](https://github.com/reonaore/FuzzyFinderIntellijPlugin/workflows/Build/badge.svg)
-[![Version](https://img.shields.io/jetbrains/plugin/v/MARKETPLACE_ID.svg)](https://plugins.jetbrains.com/plugin/MARKETPLACE_ID)
-[![Downloads](https://img.shields.io/jetbrains/plugin/d/MARKETPLACE_ID.svg)](https://plugins.jetbrains.com/plugin/MARKETPLACE_ID)
+[![Version](https://img.shields.io/jetbrains/plugin/v/MARKETPLACE_ID.svg)](https://plugins.jetbrains.com/plugin/31449-fuzzy-finder)
+[![Downloads](https://img.shields.io/jetbrains/plugin/d/MARKETPLACE_ID.svg)](https://plugins.jetbrains.com/plugin/31449-fuzzy-finder)
 
 <!-- Plugin description -->
 Fuzzy Finder adds a lightweight file search dialog to IntelliJ-based IDEs by combining
@@ -25,6 +25,57 @@ The plugin opens a modeless dialog with:
 - IntelliJ IDEA 2026.1 or newer
 - `fd` available on `PATH`, or configured in Settings
 - `fzf` available on `PATH`, or configured in Settings
+
+## Getting Started
+
+Fuzzy Finder depends on the external `fd` and `fzf` commands. The plugin does not bundle
+these executables, so install them before using the plugin.
+
+### 1. Install `fd` and `fzf`
+
+On macOS with Homebrew:
+
+```shell
+brew install fd fzf
+```
+
+On other platforms, follow the official installation guides:
+
+- [`fd` installation](https://github.com/sharkdp/fd#installation)
+- [`fzf` installation](https://github.com/junegunn/fzf#installation)
+
+### 2. Check the executable paths
+
+Make sure both commands are available from your shell:
+
+```shell
+which fd
+which fzf
+```
+
+If both commands return paths, the plugin can usually use them without additional configuration.
+
+### 3. Configure paths in the IDE if needed
+
+If IntelliJ IDEA cannot find `fd` or `fzf`, configure the executable paths manually:
+
+1. Open `Settings/Preferences | Tools | Fuzzy Finder`.
+2. Set the `fd executable path`.
+3. Set the `fzf executable path`.
+4. Apply the changes.
+
+For example, Homebrew installations may use paths such as:
+
+```text
+/opt/homebrew/bin/fd
+/opt/homebrew/bin/fzf
+```
+
+Leave the fields blank to use `fd` and `fzf` from `PATH`.
+
+### 4. Open Fuzzy Finder
+
+Open `Tools | Open Fuzzy Finder`, type a query, and press `Enter` to open the selected file.
 
 ## Usage
 
@@ -58,12 +109,15 @@ The plugin does not bundle either executable and expects them to be installed se
 
 - Using JetBrains Marketplace:
 
-  Go to [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/MARKETPLACE_ID) and install it by clicking the <kbd>Install to ...</kbd> button in case your IDE is running.
+  Go to [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/MARKETPLACE_ID) and install it by clicking
+  the <kbd>Install to ...</kbd> button in case your IDE is running.
 
-  You can also download the [latest release](https://plugins.jetbrains.com/plugin/MARKETPLACE_ID/versions) from JetBrains Marketplace and install it manually using
+  You can also download the [latest release](https://plugins.jetbrains.com/plugin/MARKETPLACE_ID/versions) from
+  JetBrains Marketplace and install it manually using
   <kbd>Settings/Preferences</kbd> > <kbd>Plugins</kbd> > <kbd>⚙️</kbd> > <kbd>Install plugin from disk...</kbd>
 
 - Manually:
 
-  Download the [latest release](https://github.com/reonaore/FuzzyFinderIntellijPlugin/releases/latest) and install it manually using
+  Download the [latest release](https://github.com/reonaore/FuzzyFinderIntellijPlugin/releases/latest) and install it
+  manually using
   <kbd>Settings/Preferences</kbd> > <kbd>Plugins</kbd> > <kbd>⚙️</kbd> > <kbd>Install plugin from disk...</kbd>
