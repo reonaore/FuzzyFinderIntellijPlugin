@@ -122,6 +122,28 @@ class FuzzyFinderParsersTest {
     }
 
     @Test
+    fun preservesRipgrepZeroWidthMatches() {
+        val parsed = FuzzyFinderParsers.parseRgMatches(
+            """
+            {"type":"match","data":{"path":{"text":"/repo/src/App.kt"},"lines":{"text":"fun needle\n"},"line_number":7,"submatches":[{"match":{"text":""},"start":0,"end":0}]}}
+            """.trimIndent().toByteArray(),
+        )
+
+        assertEquals(
+            listOf(
+                GrepMatch(
+                    path = Path.of("/repo/src/App.kt"),
+                    line = 7,
+                    column = 1,
+                    lineText = "fun needle",
+                    matchRanges = listOf(TextRange(0, 0)),
+                ),
+            ),
+            parsed,
+        )
+    }
+
+    @Test
     fun ignoresNonMatchRipgrepJsonMessages() {
         val parsed = FuzzyFinderParsers.parseRgMatches(
             """

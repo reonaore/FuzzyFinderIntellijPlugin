@@ -58,7 +58,7 @@ object FuzzyFinderParsers {
                     endOffset = utf8ByteOffsetToCharIndex(lineText, submatch.end),
                 )
             }
-            .filter { it.startOffset < it.endOffset }
+            .filter { it.startOffset <= it.endOffset }
         if (ranges.isEmpty()) {
             return null
         }
