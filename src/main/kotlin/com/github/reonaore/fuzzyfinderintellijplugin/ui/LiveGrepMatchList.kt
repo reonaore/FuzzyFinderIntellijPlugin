@@ -22,25 +22,58 @@ import javax.swing.event.ListSelectionEvent
 
 typealias GrepMatchList = CollectionListModel<GrepListItem>
 
-data class GrepListItem(
-    val match: GrepMatch,
+sealed interface GrepListItem {
+    val match: GrepMatch?
+}
+
+data class GrepFileHeaderItem(
+    val fileName: String,
+    val secondaryPath: String?,
+    val matchCount: Int,
+    val icon: Icon,
+) : GrepListItem {
+    override val match: GrepMatch? = null
+}
+
+data class GrepMatchItem(
+    override val match: GrepMatch,
     val fileName: String,
     val secondaryPath: String?,
     val location: String,
     val lineText: String,
     val highlightRanges: List<TextRange>,
-    val icon: Icon,
-)
+) : GrepListItem
 
-fun GrepMatch.toGrepListItem(basePath: String?): GrepListItem {
-    return GrepListItem(
+fun List<GrepMatch>.toGroupedGrepListItems(basePath: String?): List<GrepListItem> {
+    return groupBy(GrepMatch::path)
+        .flatMap { (path, matches) ->
+            val header = GrepFileHeaderItem(
+                fileName = path.fileName?.toString().orEmpty().ifBlank { path.relativePathFrom(basePath) },
+                secondaryPath = path.relativeParentPath(basePath),
+                matchCount = matches.size,
+                icon = path.fileIcon(),
+            )
+            listOf(header) + matches.map { match ->
+                match.toGrepListItem(
+                    fileName = header.fileName,
+                    secondaryPath = header.secondaryPath,
+                )
+            }
+        }
+}
+
+fun firstMatchIndex(items: List<GrepListItem>): Int {
+    return items.indexOfFirst { it.match != null }
+}
+
+private fun GrepMatch.toGrepListItem(fileName: String, secondaryPath: String?): GrepMatchItem {
+    return GrepMatchItem(
         match = this,
-        fileName = path.fileName?.toString().orEmpty().ifBlank { path.relativePathFrom(basePath) },
-        secondaryPath = path.relativeParentPath(basePath),
+        fileName = fileName,
+        secondaryPath = secondaryPath,
         location = "$line:$column",
         lineText = lineText,
         highlightRanges = matchRanges,
-        icon = path.fileIcon(),
     )
 }
 
@@ -105,13 +138,56 @@ private class GrepListItemRenderer : ListCellRenderer<GrepListItem> {
         isSelected: Boolean,
         cellHasFocus: Boolean,
     ): JPanel {
+        return when (value) {
+            is GrepFileHeaderItem -> renderHeader(list, value, isSelected)
+            is GrepMatchItem -> renderMatch(list, value, isSelected)
+        }
+    }
+
+    private fun renderHeader(
+        list: JList<out GrepListItem>,
+        value: GrepFileHeaderItem,
+        isSelected: Boolean,
+    ): JPanel {
         val background = if (isSelected) list.selectionBackground else list.background
         val primaryForeground = if (isSelected) list.selectionForeground else list.foreground
         val secondaryForeground = if (isSelected) list.selectionForeground else UIUtil.getContextHelpForeground()
 
         panel.isOpaque = true
         panel.background = background
+        panel.border = JBUI.Borders.empty(4, 6, 2, 6)
         iconLabel.icon = value.icon
+        iconLabel.isOpaque = false
+        iconLabel.background = background
+        textPanel.background = background
+        textPanel.isOpaque = false
+
+        lineTextLabel.clear()
+        lineTextLabel.append(value.fileName, SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, primaryForeground))
+        val matchText = if (value.matchCount == 1) "1 match" else "${value.matchCount} matches"
+        lineTextLabel.append(" $matchText", SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, secondaryForeground))
+
+        fileNameLabel.clear()
+        value.secondaryPath?.let { secondaryPath ->
+            fileNameLabel.append(secondaryPath, SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, secondaryForeground))
+        }
+
+        return panel
+    }
+
+    private fun renderMatch(
+        list: JList<out GrepListItem>,
+        value: GrepMatchItem,
+        isSelected: Boolean,
+    ): JPanel {
+        val background = if (isSelected) list.selectionBackground else list.background
+        val primaryForeground = if (isSelected) list.selectionForeground else list.foreground
+        val secondaryForeground = if (isSelected) list.selectionForeground else UIUtil.getContextHelpForeground()
+
+        panel.isOpaque = true
+        panel.background = background
+        panel.border = JBUI.Borders.empty(2, 30, 3, 6)
+        iconLabel.icon = null
         iconLabel.isOpaque = false
         iconLabel.background = background
         textPanel.background = background
@@ -120,8 +196,8 @@ private class GrepListItemRenderer : ListCellRenderer<GrepListItem> {
         lineTextLabel.applyHighlight(value.lineText, value.highlightRanges, primaryForeground)
 
         fileNameLabel.clear()
-        fileNameLabel.append(value.fileName, SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, secondaryForeground))
-        fileNameLabel.append(" ${value.location}", SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, secondaryForeground))
+        fileNameLabel.append(value.location, SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, secondaryForeground))
+        fileNameLabel.append(" ${value.fileName}", SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, secondaryForeground))
         value.secondaryPath?.let { secondaryPath ->
             fileNameLabel.append(" $secondaryPath", SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, secondaryForeground))
         }

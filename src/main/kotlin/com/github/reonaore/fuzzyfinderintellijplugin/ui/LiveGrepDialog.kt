@@ -144,9 +144,7 @@ class LiveGrepDialog(private val project: Project) : DialogWrapper(project, fals
 
     private suspend fun applySearchResult(searchResult: GrepSearchResult) {
         val matches = searchResult.matches
-        val items = matches.map { match ->
-            match.toGrepListItem(project.basePath)
-        }
+        val items = matches.toGroupedGrepListItems(project.basePath)
         withContext(Dispatchers.EDT) {
             visibleMatches = matches
             resultModel.replaceAll(items)
@@ -156,7 +154,7 @@ class LiveGrepDialog(private val project: Project) : DialogWrapper(project, fals
                 searchResult.totalMatches,
             )
             if (matches.isNotEmpty()) {
-                resultList.selectedIndex = 0
+                resultList.selectedIndex = firstMatchIndex(items)
             } else {
                 isOKActionEnabled = false
             }
@@ -247,11 +245,23 @@ class LiveGrepDialog(private val project: Project) : DialogWrapper(project, fals
         if (lastIndex < 0) return
 
         val currentIndex = resultList.selectedIndex.takeIf { it >= 0 } ?: 0
-        val nextIndex = (currentIndex + offset).coerceIn(0, lastIndex)
+        val nextIndex = nextMatchIndex(currentIndex, offset, lastIndex)
         if (nextIndex == resultList.selectedIndex) return
 
         resultList.selectedIndex = nextIndex
         resultList.ensureIndexIsVisible(nextIndex)
+    }
+
+    private fun nextMatchIndex(currentIndex: Int, offset: Int, lastIndex: Int): Int {
+        var nextIndex = (currentIndex + offset).coerceIn(0, lastIndex)
+        while (nextIndex in 0..lastIndex && resultModel.getElementAt(nextIndex).match == null) {
+            val candidate = (nextIndex + offset.coerceIn(-1, 1)).coerceIn(0, lastIndex)
+            if (candidate == nextIndex) {
+                break
+            }
+            nextIndex = candidate
+        }
+        return nextIndex
     }
 
     private companion object {
