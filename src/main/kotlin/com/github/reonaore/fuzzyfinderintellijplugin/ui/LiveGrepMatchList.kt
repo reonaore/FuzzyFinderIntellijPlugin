@@ -1,6 +1,7 @@
 package com.github.reonaore.fuzzyfinderintellijplugin.ui
 
 import com.github.reonaore.fuzzyfinderintellijplugin.services.GrepMatch
+import com.github.reonaore.fuzzyfinderintellijplugin.services.TextRange
 import com.intellij.ui.CollectionListModel
 import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.components.JBList
@@ -27,6 +28,7 @@ data class GrepListItem(
     val secondaryPath: String?,
     val location: String,
     val lineText: String,
+    val highlightRanges: List<TextRange>,
     val icon: Icon,
 )
 
@@ -36,7 +38,8 @@ fun GrepMatch.toGrepListItem(basePath: String?): GrepListItem {
         fileName = path.fileName?.toString().orEmpty().ifBlank { path.relativePathFrom(basePath) },
         secondaryPath = path.relativeParentPath(basePath),
         location = "$line:$column",
-        lineText = lineText.trim(),
+        lineText = lineText,
+        highlightRanges = matchRanges,
         icon = path.fileIcon(),
     )
 }
@@ -65,8 +68,8 @@ private class GrepListItemRenderer : ListCellRenderer<GrepListItem> {
     private val panel = JPanel(BorderLayout(JBUI.scale(8), 0))
     private val iconLabel = JLabel()
     private val textPanel = JPanel(GridBagLayout())
+    private val lineTextLabel = HighlightedTextComponent()
     private val fileNameLabel = com.intellij.ui.SimpleColoredComponent()
-    private val lineTextLabel = com.intellij.ui.SimpleColoredComponent()
 
     init {
         textPanel.isOpaque = false
@@ -74,7 +77,7 @@ private class GrepListItemRenderer : ListCellRenderer<GrepListItem> {
         panel.add(iconLabel, BorderLayout.WEST)
         panel.add(textPanel, BorderLayout.CENTER)
         textPanel.add(
-            fileNameLabel,
+            lineTextLabel,
             GridBagConstraints().apply {
                 gridx = 0
                 gridy = 0
@@ -84,7 +87,7 @@ private class GrepListItemRenderer : ListCellRenderer<GrepListItem> {
             },
         )
         textPanel.add(
-            lineTextLabel,
+            fileNameLabel,
             GridBagConstraints().apply {
                 gridx = 0
                 gridy = 1
@@ -114,15 +117,15 @@ private class GrepListItemRenderer : ListCellRenderer<GrepListItem> {
         textPanel.background = background
         textPanel.isOpaque = false
 
+        lineTextLabel.applyHighlight(value.lineText, value.highlightRanges, primaryForeground)
+
         fileNameLabel.clear()
-        fileNameLabel.append(value.fileName, SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, primaryForeground))
-        fileNameLabel.append(" ${value.location}", SimpleTextAttributes(SimpleTextAttributes.STYLE_SEARCH_MATCH, primaryForeground))
+        fileNameLabel.append(value.fileName, SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, secondaryForeground))
+        fileNameLabel.append(" ${value.location}", SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, secondaryForeground))
         value.secondaryPath?.let { secondaryPath ->
             fileNameLabel.append(" $secondaryPath", SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, secondaryForeground))
         }
 
-        lineTextLabel.clear()
-        lineTextLabel.append(value.lineText, SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, secondaryForeground))
         return panel
     }
 }

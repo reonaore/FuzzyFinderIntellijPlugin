@@ -134,8 +134,8 @@ class FuzzyFinderSearchEngineTest {
         val runner = RecordingCommandRunner(
             outputs = listOf(
                 """
-                /repo/src/App.kt:12:9:fun needle() = Unit
-                /repo/src/Other.kt:24:1:needle()
+                {"type":"match","data":{"path":{"text":"/repo/src/App.kt"},"lines":{"text":"fun needle() = Unit\n"},"line_number":12,"submatches":[{"match":{"text":"needle"},"start":4,"end":10}]}}
+                {"type":"match","data":{"path":{"text":"/repo/src/Other.kt"},"lines":{"text":"needle()\n"},"line_number":24,"submatches":[{"match":{"text":"needle"},"start":0,"end":6}]}}
                 """.trimIndent().toByteArray(),
             ),
         )
@@ -155,7 +155,18 @@ class FuzzyFinderSearchEngineTest {
 
         assertEquals(2, result.totalMatches)
         assertEquals("needle", result.query)
-        assertEquals(listOf(GrepMatch(Path.of("/repo/src/App.kt"), 12, 9, "fun needle() = Unit")), result.matches)
+        assertEquals(
+            listOf(
+                GrepMatch(
+                    path = Path.of("/repo/src/App.kt"),
+                    line = 12,
+                    column = 5,
+                    lineText = "fun needle() = Unit",
+                    matchRanges = listOf(TextRange(4, 10)),
+                ),
+            ),
+            result.matches,
+        )
     }
 
     @Test

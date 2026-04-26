@@ -3,7 +3,9 @@ package com.github.reonaore.fuzzyfinderintellijplugin.ui
 import com.github.reonaore.fuzzyfinderintellijplugin.MyBundle
 import com.github.reonaore.fuzzyfinderintellijplugin.services.FuzzyFinderException
 import com.github.reonaore.fuzzyfinderintellijplugin.services.FuzzyFinderService
+import com.github.reonaore.fuzzyfinderintellijplugin.services.GrepMatch
 import com.github.reonaore.fuzzyfinderintellijplugin.services.GrepSearchResult
+import com.github.reonaore.fuzzyfinderintellijplugin.services.PreviewHighlightRange
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.application.asContextElement
@@ -56,6 +58,7 @@ class LiveGrepDialog(private val project: Project) : DialogWrapper(project, fals
     private val dialogScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var searchJob: Job? = null
     private var previewJob: Job? = null
+    private var visibleMatches: List<GrepMatch> = emptyList()
     private val searchTimer = Timer(SEARCH_DEBOUNCE_MS) { triggerSearch() }.apply {
         isRepeats = false
     }
@@ -145,6 +148,7 @@ class LiveGrepDialog(private val project: Project) : DialogWrapper(project, fals
             match.toGrepListItem(project.basePath)
         }
         withContext(Dispatchers.EDT) {
+            visibleMatches = matches
             resultModel.replaceAll(items)
             statusLabel.text = MyBundle.message(
                 "dialog.grep.status.resultsDetailed",
@@ -172,8 +176,24 @@ class LiveGrepDialog(private val project: Project) : DialogWrapper(project, fals
             }
             writeAction { isOKActionEnabled = true }
             val previewContent = previewLoader.load(selected.path)
-            preview.show(previewContent, scrollToLine = selected.line)
+            preview.show(
+                previewContent,
+                scrollToLine = selected.line,
+                highlightRanges = previewHighlightsFor(selected),
+            )
         }
+    }
+
+    private fun previewHighlightsFor(selected: GrepMatch): List<PreviewHighlightRange> {
+        return visibleMatches
+            .asSequence()
+            .filter { it.path == selected.path }
+            .flatMap { match ->
+                match.matchRanges.map { range ->
+                    PreviewHighlightRange(line = match.line, range = range)
+                }
+            }
+            .toList()
     }
 
     private fun installCandidateNavigationShortcuts(

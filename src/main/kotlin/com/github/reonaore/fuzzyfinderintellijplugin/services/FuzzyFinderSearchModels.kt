@@ -21,6 +21,17 @@ data class GrepMatch(
     val line: Int,
     val column: Int,
     val lineText: String,
+    val matchRanges: List<TextRange>,
+)
+
+data class TextRange(
+    val startOffset: Int,
+    val endOffset: Int,
+)
+
+data class PreviewHighlightRange(
+    val line: Int,
+    val range: TextRange,
 )
 
 data class FdSearchOptions(
@@ -52,11 +63,7 @@ enum class FdEntryType(val presentableName: String, val fdValue: String?) {
 
 internal fun buildRgParameters(query: String, options: GrepSearchOptions, root: Path): List<String> {
     val parameters = mutableListOf(
-        "--line-number",
-        "--column",
-        "--with-filename",
-        "--no-heading",
-        "--color=never",
+        "--json",
     )
 
     if (options.smartCase) {

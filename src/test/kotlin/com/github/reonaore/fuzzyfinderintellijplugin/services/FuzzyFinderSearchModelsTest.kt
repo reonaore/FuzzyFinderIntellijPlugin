@@ -49,11 +49,7 @@ class FuzzyFinderSearchModelsTest {
 
         assertEquals(
             listOf(
-                "--line-number",
-                "--column",
-                "--with-filename",
-                "--no-heading",
-                "--color=never",
+                "--json",
                 "--smart-case",
                 "--hidden",
                 "--no-ignore",
