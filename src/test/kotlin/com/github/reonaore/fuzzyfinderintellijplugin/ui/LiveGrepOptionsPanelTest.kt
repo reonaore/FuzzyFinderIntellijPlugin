@@ -16,7 +16,28 @@ class LiveGrepOptionsPanelTest {
         assertTrue(options.followSymlinks)
         assertTrue(options.respectGitIgnore)
         assertTrue(options.smartCase)
+        assertEquals(emptyList<String>(), options.includeExtensions)
         assertEquals(listOf(".git"), options.excludePatterns)
+    }
+
+    @Test
+    fun parsesCommaSeparatedExtensionFilters() {
+        val panel = LiveGrepOptionsPanel { }
+
+        panel.setExtensionsText(" kt, .java,  ,md ")
+
+        assertEquals(listOf("kt", ".java", "md"), panel.currentOptions().includeExtensions)
+    }
+
+    @Test
+    fun notifiesWhenExtensionFiltersChange() {
+        var changes = 0
+        val panel = LiveGrepOptionsPanel { changes++ }
+
+        panel.setExtensionsText("kt")
+
+        assertEquals("kt", panel.extensionsText())
+        assertEquals(1, changes)
     }
 
     @Test

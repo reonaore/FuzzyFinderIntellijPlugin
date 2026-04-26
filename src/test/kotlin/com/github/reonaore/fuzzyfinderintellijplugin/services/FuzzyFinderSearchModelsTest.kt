@@ -41,6 +41,7 @@ class FuzzyFinderSearchModelsTest {
                 includeHidden = true,
                 followSymlinks = false,
                 respectGitIgnore = false,
+                includeExtensions = listOf("kt", ".java", " "),
                 excludePatterns = listOf(".git", "node_modules"),
                 smartCase = true,
             ),
@@ -53,8 +54,32 @@ class FuzzyFinderSearchModelsTest {
                 "--smart-case",
                 "--hidden",
                 "--no-ignore",
+                "--glob", "*.kt",
+                "--glob", "*.java",
                 "--glob", "!.git",
                 "--glob", "!node_modules",
+                "--",
+                "Needle",
+                "/repo",
+            ),
+            parameters,
+        )
+    }
+
+    @Test
+    fun ignoresBlankRgExtensionFilters() {
+        val parameters = buildRgParameters(
+            "Needle",
+            GrepSearchOptions(includeExtensions = listOf(" ", "")),
+            Path.of("/repo"),
+        )
+
+        assertEquals(
+            listOf(
+                "--json",
+                "--smart-case",
+                "--follow",
+                "--glob", "!.git",
                 "--",
                 "Needle",
                 "/repo",

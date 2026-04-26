@@ -17,6 +17,7 @@ class LiveGrepOptionsPanel(
     private val followSymlinksCheckBox = JCheckBox(FuzzyFinderOptionsPanel.mnemonicLabel("Follow symlinks", 's'))
     private val respectGitIgnoreCheckBox = JCheckBox(FuzzyFinderOptionsPanel.mnemonicLabel(".gitignore", 'g'))
     private val smartCaseCheckBox = JCheckBox(FuzzyFinderOptionsPanel.mnemonicLabel("Smart case", 'c'))
+    private val extensionsField = JBTextField()
     private val excludeField = JBTextField(DEFAULT_EXCLUDES)
 
     init {
@@ -36,6 +37,11 @@ class LiveGrepOptionsPanel(
         followSymlinksCheckBox.addActionListener { onOptionsChanged() }
         respectGitIgnoreCheckBox.addActionListener { onOptionsChanged() }
         smartCaseCheckBox.addActionListener { onOptionsChanged() }
+        extensionsField.document.addDocumentListener(object : DocumentAdapter() {
+            override fun textChanged(e: javax.swing.event.DocumentEvent) {
+                onOptionsChanged()
+            }
+        })
         excludeField.document.addDocumentListener(object : DocumentAdapter() {
             override fun textChanged(e: javax.swing.event.DocumentEvent) {
                 onOptionsChanged()
@@ -49,6 +55,9 @@ class LiveGrepOptionsPanel(
             add(followSymlinksCheckBox)
             add(respectGitIgnoreCheckBox)
             add(smartCaseCheckBox)
+            add(JLabel("Extensions"))
+            extensionsField.columns = 12
+            add(extensionsField)
             add(JLabel("Exclude"))
             excludeField.columns = 20
             add(excludeField)
@@ -61,12 +70,29 @@ class LiveGrepOptionsPanel(
             followSymlinks = followSymlinksCheckBox.isSelected,
             respectGitIgnore = respectGitIgnoreCheckBox.isSelected,
             smartCase = smartCaseCheckBox.isSelected,
-            excludePatterns = excludeField.text
-                .split(',')
-                .map(String::trim)
-                .filter(String::isNotEmpty),
+            includeExtensions = parseCommaSeparatedText(extensionsField.text),
+            excludePatterns = parseCommaSeparatedText(excludeField.text),
         )
     }
+
+    private fun parseCommaSeparatedText(text: String): List<String> {
+        return text
+            .split(',')
+            .map(String::trim)
+            .filter(String::isNotEmpty)
+    }
+
+    internal fun setExtensionsText(text: String) {
+        extensionsField.text = text
+    }
+
+    internal fun extensionsText(): String = extensionsField.text
+
+    internal fun setExcludeText(text: String) {
+        excludeField.text = text
+    }
+
+    internal fun excludeText(): String = excludeField.text
 
     fun toggleIncludeHidden() {
         toggle(includeHiddenCheckBox)

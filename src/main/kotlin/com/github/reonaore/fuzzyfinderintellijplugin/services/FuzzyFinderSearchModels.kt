@@ -46,6 +46,7 @@ data class GrepSearchOptions(
     val includeHidden: Boolean = false,
     val followSymlinks: Boolean = true,
     val respectGitIgnore: Boolean = true,
+    val includeExtensions: List<String> = emptyList(),
     val excludePatterns: List<String> = listOf(".git"),
     val smartCase: Boolean = true,
 )
@@ -78,6 +79,12 @@ internal fun buildRgParameters(query: String, options: GrepSearchOptions, root: 
     if (!options.respectGitIgnore) {
         parameters += "--no-ignore"
     }
+    options.includeExtensions
+        .map(::normalizeExtension)
+        .filter(String::isNotEmpty)
+        .forEach { extension ->
+            parameters += listOf("--glob", "*.$extension")
+        }
     options.excludePatterns
         .map(String::trim)
         .filter(String::isNotEmpty)
@@ -87,6 +94,10 @@ internal fun buildRgParameters(query: String, options: GrepSearchOptions, root: 
 
     parameters += listOf("--", query, root.toString())
     return parameters
+}
+
+private fun normalizeExtension(extension: String): String {
+    return extension.trim().removePrefix(".")
 }
 
 internal fun buildFdParameters(options: FdSearchOptions, root: Path): List<String> {
