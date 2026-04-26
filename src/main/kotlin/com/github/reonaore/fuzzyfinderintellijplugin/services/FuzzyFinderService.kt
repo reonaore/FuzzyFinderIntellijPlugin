@@ -43,6 +43,21 @@ class FuzzyFinderService(
         )
     }
 
+    suspend fun grep(query: String, options: GrepSearchOptions, limit: Int = MAX_RESULTS): GrepSearchResult {
+        val basePath = project.basePath ?: return GrepSearchResult(
+            totalMatches = 0,
+            query = query,
+            matches = emptyList(),
+        )
+
+        return searchEngine.grep(
+            query = query,
+            options = options,
+            root = Path.of(basePath),
+            limit = limit,
+        )
+    }
+
     fun notifyError(message: String) {
         NotificationGroupManager.getInstance()
             .getNotificationGroup("Fuzzy Finder Notifications")
@@ -58,6 +73,7 @@ class FuzzyFinderService(
         get() = FuzzyFinderSearchEngine(
             fdExecutable = settingsService.executablePath(SupportedCommand.FD),
             fzfExecutable = settingsService.executablePath(SupportedCommand.FZF),
+            rgExecutable = settingsService.executablePath(SupportedCommand.RG),
             runner = runner,
         )
 }

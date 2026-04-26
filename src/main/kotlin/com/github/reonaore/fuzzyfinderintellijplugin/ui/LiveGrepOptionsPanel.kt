@@ -1,41 +1,41 @@
 package com.github.reonaore.fuzzyfinderintellijplugin.ui
 
-import com.github.reonaore.fuzzyfinderintellijplugin.services.FdEntryType
-import com.github.reonaore.fuzzyfinderintellijplugin.services.FdSearchOptions
+import com.github.reonaore.fuzzyfinderintellijplugin.services.GrepSearchOptions
 import com.intellij.ui.DocumentAdapter
 import com.intellij.ui.components.JBTextField
 import java.awt.FlowLayout
 import java.awt.event.KeyEvent
 import javax.swing.JCheckBox
-import javax.swing.JComboBox
 import javax.swing.JComponent
 import javax.swing.JLabel
 import javax.swing.JPanel
 
-class FuzzyFinderOptionsPanel(
+class LiveGrepOptionsPanel(
     private val onOptionsChanged: () -> Unit,
 ) {
-    private val typeComboBox = JComboBox(FdEntryType.entries.toTypedArray())
-    private val includeHiddenCheckBox = JCheckBox(mnemonicLabel("Hidden", 'H'))
-    private val followSymlinksCheckBox = JCheckBox(mnemonicLabel("Follow symlinks", 's'))
-    private val respectGitIgnoreCheckBox = JCheckBox(mnemonicLabel(".gitignore", 'g'))
+    private val includeHiddenCheckBox = JCheckBox(FuzzyFinderOptionsPanel.mnemonicLabel("Hidden", 'H'))
+    private val followSymlinksCheckBox = JCheckBox(FuzzyFinderOptionsPanel.mnemonicLabel("Follow symlinks", 's'))
+    private val respectGitIgnoreCheckBox = JCheckBox(FuzzyFinderOptionsPanel.mnemonicLabel(".gitignore", 'g'))
+    private val smartCaseCheckBox = JCheckBox(FuzzyFinderOptionsPanel.mnemonicLabel("Smart case", 'c'))
     private val excludeField = JBTextField(DEFAULT_EXCLUDES)
 
     init {
-        typeComboBox.selectedItem = FdEntryType.FILES
         followSymlinksCheckBox.isSelected = true
         respectGitIgnoreCheckBox.isSelected = true
+        smartCaseCheckBox.isSelected = true
         includeHiddenCheckBox.mnemonic = KeyEvent.VK_H
         followSymlinksCheckBox.mnemonic = KeyEvent.VK_S
         respectGitIgnoreCheckBox.mnemonic = KeyEvent.VK_G
+        smartCaseCheckBox.mnemonic = KeyEvent.VK_C
         includeHiddenCheckBox.toolTipText = ALT_H_TOOLTIP
         followSymlinksCheckBox.toolTipText = ALT_S_TOOLTIP
         respectGitIgnoreCheckBox.toolTipText = ALT_G_TOOLTIP
+        smartCaseCheckBox.toolTipText = ALT_C_TOOLTIP
 
-        typeComboBox.addActionListener { onOptionsChanged() }
         includeHiddenCheckBox.addActionListener { onOptionsChanged() }
         followSymlinksCheckBox.addActionListener { onOptionsChanged() }
         respectGitIgnoreCheckBox.addActionListener { onOptionsChanged() }
+        smartCaseCheckBox.addActionListener { onOptionsChanged() }
         excludeField.document.addDocumentListener(object : DocumentAdapter() {
             override fun textChanged(e: javax.swing.event.DocumentEvent) {
                 onOptionsChanged()
@@ -45,23 +45,22 @@ class FuzzyFinderOptionsPanel(
 
     fun component(): JComponent {
         return JPanel(FlowLayout(FlowLayout.LEFT, 8, 0)).apply {
-            add(JLabel("Type"))
-            add(typeComboBox)
             add(includeHiddenCheckBox)
             add(followSymlinksCheckBox)
             add(respectGitIgnoreCheckBox)
+            add(smartCaseCheckBox)
             add(JLabel("Exclude"))
             excludeField.columns = 20
             add(excludeField)
         }
     }
 
-    fun currentOptions(): FdSearchOptions {
-        return FdSearchOptions(
-            entryType = typeComboBox.selectedItem as? FdEntryType ?: FdEntryType.FILES,
+    fun currentOptions(): GrepSearchOptions {
+        return GrepSearchOptions(
             includeHidden = includeHiddenCheckBox.isSelected,
             followSymlinks = followSymlinksCheckBox.isSelected,
             respectGitIgnore = respectGitIgnoreCheckBox.isSelected,
+            smartCase = smartCaseCheckBox.isSelected,
             excludePatterns = excludeField.text
                 .split(',')
                 .map(String::trim)
@@ -81,6 +80,10 @@ class FuzzyFinderOptionsPanel(
         toggle(respectGitIgnoreCheckBox)
     }
 
+    fun toggleSmartCase() {
+        toggle(smartCaseCheckBox)
+    }
+
     private fun toggle(checkBox: JCheckBox) {
         checkBox.doClick(0)
     }
@@ -91,40 +94,15 @@ class FuzzyFinderOptionsPanel(
 
     internal fun respectGitIgnoreLabelText(): String = respectGitIgnoreCheckBox.text
 
-    internal fun includeHiddenTooltipText(): String? = includeHiddenCheckBox.toolTipText
+    internal fun smartCaseLabelText(): String = smartCaseCheckBox.text
 
-    internal fun followSymlinksTooltipText(): String? = followSymlinksCheckBox.toolTipText
+    internal fun smartCaseTooltipText(): String? = smartCaseCheckBox.toolTipText
 
-    internal fun respectGitIgnoreTooltipText(): String? = respectGitIgnoreCheckBox.toolTipText
-
-    companion object {
+    private companion object {
         const val DEFAULT_EXCLUDES = ".git"
         const val ALT_H_TOOLTIP = "Alt+H"
         const val ALT_S_TOOLTIP = "Alt+S"
         const val ALT_G_TOOLTIP = "Alt+G"
-
-        fun mnemonicLabel(label: String, mnemonicChar: Char): String {
-            var underlined = false
-            return buildString(label.length + 13) {
-                append("<html>")
-                label.forEach { char ->
-                    val escaped = when (char) {
-                        '<' -> "&lt;"
-                        '>' -> "&gt;"
-                        '&' -> "&amp;"
-                        else -> char.toString()
-                    }
-                    if (!underlined && char.equals(mnemonicChar, ignoreCase = true)) {
-                        append("<u>")
-                        append(escaped)
-                        append("</u>")
-                        underlined = true
-                    } else {
-                        append(escaped)
-                    }
-                }
-                append("</html>")
-            }
-        }
+        const val ALT_C_TOOLTIP = "Alt+C"
     }
 }

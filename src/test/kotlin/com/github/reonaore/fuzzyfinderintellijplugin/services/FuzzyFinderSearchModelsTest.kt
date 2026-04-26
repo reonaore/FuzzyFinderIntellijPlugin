@@ -32,4 +32,38 @@ class FuzzyFinderSearchModelsTest {
             parameters,
         )
     }
+
+    @Test
+    fun buildsRgParametersFromOptions() {
+        val parameters = buildRgParameters(
+            "Needle",
+            GrepSearchOptions(
+                includeHidden = true,
+                followSymlinks = false,
+                respectGitIgnore = false,
+                excludePatterns = listOf(".git", "node_modules"),
+                smartCase = true,
+            ),
+            Path.of("/repo"),
+        )
+
+        assertEquals(
+            listOf(
+                "--line-number",
+                "--column",
+                "--with-filename",
+                "--no-heading",
+                "--color=never",
+                "--smart-case",
+                "--hidden",
+                "--no-ignore",
+                "--glob", "!.git",
+                "--glob", "!node_modules",
+                "--",
+                "Needle",
+                "/repo",
+            ),
+            parameters,
+        )
+    }
 }

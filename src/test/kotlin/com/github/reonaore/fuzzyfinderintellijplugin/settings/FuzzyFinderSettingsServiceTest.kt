@@ -18,5 +18,14 @@ class FuzzyFinderSettingsServiceTest {
         val settings = FuzzyFinderSettingsService()
 
         assertEquals("fzf", settings.executablePath(SupportedCommand.FZF))
+        assertEquals("rg", settings.executablePath(SupportedCommand.RG))
+    }
+
+    @Test
+    fun usesConfiguredRipgrepExecutablePathWhenPresent() {
+        val settings = FuzzyFinderSettingsService()
+        settings.loadState(FuzzyFinderSettingsState(rgExecutablePath = "/opt/homebrew/bin/rg"))
+
+        assertEquals("/opt/homebrew/bin/rg", settings.executablePath(SupportedCommand.RG))
     }
 }

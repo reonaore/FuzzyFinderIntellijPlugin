@@ -4,6 +4,7 @@ import com.github.reonaore.fuzzyfinderintellijplugin.MyBundle
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.application.writeAction
 import com.intellij.openapi.editor.EditorFactory
+import com.intellij.openapi.editor.ScrollType
 import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.editor.highlighter.EditorHighlighterFactory
 import com.intellij.openapi.fileTypes.PlainTextFileType
@@ -26,7 +27,7 @@ class FuzzyFinderPreview(
         setCaretEnabled(false)
     }
 
-    suspend fun show(content: PreviewContent) {
+    suspend fun show(content: PreviewContent, scrollToLine: Int? = null) {
         val (text, virtualFile) = content
         val highlighter = readAction {
             if (virtualFile != null && !virtualFile.isDirectory && !virtualFile.fileType.isBinary) {
@@ -40,6 +41,11 @@ class FuzzyFinderPreview(
             editor.caretModel.moveToOffset(0)
             editor.scrollingModel.scrollVertically(0)
             document.setText(text)
+            scrollToLine?.let { line ->
+                val lineIndex = (line - 1).coerceIn(0, document.lineCount - 1)
+                editor.caretModel.moveToLogicalPosition(com.intellij.openapi.editor.LogicalPosition(lineIndex, 0))
+                editor.scrollingModel.scrollToCaret(ScrollType.CENTER)
+            }
         }
     }
 

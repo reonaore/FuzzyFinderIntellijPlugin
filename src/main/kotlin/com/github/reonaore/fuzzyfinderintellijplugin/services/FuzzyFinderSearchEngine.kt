@@ -6,6 +6,7 @@ import java.nio.file.Path
 class FuzzyFinderSearchEngine(
     private val fdExecutable: String,
     private val fzfExecutable: String,
+    private val rgExecutable: String,
     private val runner: CommandRunner,
 ) {
 
@@ -40,8 +41,39 @@ class FuzzyFinderSearchEngine(
         )
     }
 
+    suspend fun grep(
+        query: String,
+        options: GrepSearchOptions,
+        root: Path,
+        limit: Int = MAX_RESULTS,
+    ): GrepSearchResult {
+        if (query.isBlank()) {
+            return GrepSearchResult(
+                totalMatches = 0,
+                query = query,
+                matches = emptyList(),
+            )
+        }
+
+        val stdout = runner.run(
+            command = CommandSpec(
+                executable = rgExecutable,
+                parameters = buildRgParameters(query, options, root),
+            ),
+            noMatchExitCodes = setOf(RG_NO_MATCH_EXIT_CODE),
+        )
+        val matches = FuzzyFinderParsers.parseRgMatches(stdout)
+
+        return GrepSearchResult(
+            totalMatches = matches.size,
+            query = query,
+            matches = matches.take(limit),
+        )
+    }
+
     private companion object {
         const val MAX_RESULTS = 200
         const val FZF_NO_MATCH_EXIT_CODE = 1
+        const val RG_NO_MATCH_EXIT_CODE = 1
     }
 }

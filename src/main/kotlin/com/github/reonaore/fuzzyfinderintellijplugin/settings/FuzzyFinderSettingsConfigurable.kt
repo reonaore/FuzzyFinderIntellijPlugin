@@ -14,6 +14,7 @@ class FuzzyFinderSettingsConfigurable : Configurable {
 
     private val fdPathField = JBTextField()
     private val fzfPathField = JBTextField()
+    private val rgPathField = JBTextField()
 
     override fun getDisplayName(): String = MyBundle.message("settings.displayName")
 
@@ -45,18 +46,30 @@ class FuzzyFinderSettingsConfigurable : Configurable {
             add(fzfPathField, constraints)
             constraints.gridy++
             add(JLabel(MyBundle.message("settings.fzf.defaultHint")), constraints)
+
+            constraints.gridy++
+            constraints.insets = Insets(12, 0, 4, 0)
+            add(JLabel(MyBundle.message("settings.rg.path")), constraints)
+            constraints.gridy++
+            constraints.insets = Insets(4, 0, 4, 0)
+            add(rgPathField, constraints)
+            constraints.gridy++
+            add(JLabel(MyBundle.message("settings.rg.defaultHint")), constraints)
         }
     }
 
     override fun isModified(): Boolean {
         val state = FuzzyFinderSettingsService.getInstance().state
-        return fdPathField.text != state.fdExecutablePath || fzfPathField.text != state.fzfExecutablePath
+        return fdPathField.text != state.fdExecutablePath ||
+            fzfPathField.text != state.fzfExecutablePath ||
+            rgPathField.text != state.rgExecutablePath
     }
 
     override fun apply() {
         val state = FuzzyFinderSettingsService.getInstance().state
         state.fdExecutablePath = fdPathField.text.trim()
         state.fzfExecutablePath = fzfPathField.text.trim()
+        state.rgExecutablePath = rgPathField.text.trim()
     }
 
     override fun reset() {
@@ -66,5 +79,6 @@ class FuzzyFinderSettingsConfigurable : Configurable {
     private fun resetFields(state: FuzzyFinderSettingsState) {
         fdPathField.text = state.fdExecutablePath
         fzfPathField.text = state.fzfExecutablePath
+        rgPathField.text = state.rgExecutablePath
     }
 }
