@@ -18,6 +18,7 @@ class FuzzyFinderSearchEngineTest {
         val engine = FuzzyFinderSearchEngine(
             fdExecutable = "fd",
             fzfExecutable = "fzf",
+            rgExecutable = "rg",
             runner = runner,
         )
 
@@ -43,6 +44,7 @@ class FuzzyFinderSearchEngineTest {
         val engine = FuzzyFinderSearchEngine(
             fdExecutable = "fd",
             fzfExecutable = "fzf",
+            rgExecutable = "rg",
             runner = runner,
         )
 
@@ -67,6 +69,7 @@ class FuzzyFinderSearchEngineTest {
         val engine = FuzzyFinderSearchEngine(
             fdExecutable = "fd",
             fzfExecutable = "fzf",
+            rgExecutable = "rg",
             runner = runner,
         )
 
@@ -98,6 +101,7 @@ class FuzzyFinderSearchEngineTest {
         val engine = FuzzyFinderSearchEngine(
             fdExecutable = "/usr/local/bin/fd",
             fzfExecutable = "/usr/local/bin/fzf",
+            rgExecutable = "rg",
             runner = runner,
         )
 
@@ -123,6 +127,101 @@ class FuzzyFinderSearchEngineTest {
             runner.calls[1].command,
         )
         assertEquals(setOf(1), runner.calls[1].noMatchExitCodes)
+    }
+
+    @Test
+    fun grepParsesRipgrepMatchesAndLimitsResults() = runBlocking {
+        val runner = RecordingCommandRunner(
+            outputs = listOf(
+                """
+                {"type":"match","data":{"path":{"text":"/repo/src/App.kt"},"lines":{"text":"fun needle() = Unit\n"},"line_number":12,"submatches":[{"match":{"text":"needle"},"start":4,"end":10}]}}
+                {"type":"match","data":{"path":{"text":"/repo/src/Other.kt"},"lines":{"text":"needle()\n"},"line_number":24,"submatches":[{"match":{"text":"needle"},"start":0,"end":6}]}}
+                """.trimIndent().toByteArray(),
+            ),
+        )
+        val engine = FuzzyFinderSearchEngine(
+            fdExecutable = "fd",
+            fzfExecutable = "fzf",
+            rgExecutable = "rg",
+            runner = runner,
+        )
+
+        val result = engine.grep(
+            query = "needle",
+            options = GrepSearchOptions(),
+            root = Path.of("/repo"),
+            limit = 1,
+        )
+
+        assertEquals(2, result.totalMatches)
+        assertEquals("needle", result.query)
+        assertEquals(
+            listOf(
+                GrepMatch(
+                    path = Path.of("/repo/src/App.kt"),
+                    line = 12,
+                    column = 5,
+                    lineText = "fun needle() = Unit",
+                    matchRanges = listOf(TextRange(4, 10)),
+                ),
+            ),
+            result.matches,
+        )
+    }
+
+    @Test
+    fun grepPassesQueryOptionsAndNoMatchCodeToRunner() = runBlocking {
+        val options = GrepSearchOptions(
+            includeHidden = true,
+            followSymlinks = false,
+            respectGitIgnore = false,
+            excludePatterns = listOf(".git", "build"),
+            smartCase = true,
+        )
+        val runner = RecordingCommandRunner(outputs = listOf(ByteArray(0)))
+        val engine = FuzzyFinderSearchEngine(
+            fdExecutable = "fd",
+            fzfExecutable = "fzf",
+            rgExecutable = "/usr/local/bin/rg",
+            runner = runner,
+        )
+
+        engine.grep(
+            query = "needle",
+            options = options,
+            root = Path.of("/repo"),
+        )
+
+        assertEquals(1, runner.calls.size)
+        assertEquals(
+            CommandSpec(
+                executable = "/usr/local/bin/rg",
+                parameters = buildRgParameters("needle", options, Path.of("/repo")),
+            ),
+            runner.calls[0].command,
+        )
+        assertEquals(setOf(1), runner.calls[0].noMatchExitCodes)
+    }
+
+    @Test
+    fun grepReturnsEmptyResultsForBlankQueryWithoutRunningRg() = runBlocking {
+        val runner = RecordingCommandRunner(outputs = emptyList())
+        val engine = FuzzyFinderSearchEngine(
+            fdExecutable = "fd",
+            fzfExecutable = "fzf",
+            rgExecutable = "rg",
+            runner = runner,
+        )
+
+        val result = engine.grep(
+            query = " ",
+            options = GrepSearchOptions(),
+            root = Path.of("/repo"),
+        )
+
+        assertEquals(0, result.totalMatches)
+        assertEquals(emptyList<GrepMatch>(), result.matches)
+        assertEquals(0, runner.calls.size)
     }
 
     private data class Invocation(

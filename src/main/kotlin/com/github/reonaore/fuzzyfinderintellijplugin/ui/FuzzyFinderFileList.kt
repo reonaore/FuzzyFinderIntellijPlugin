@@ -3,7 +3,6 @@ package com.github.reonaore.fuzzyfinderintellijplugin.ui
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.ui.CollectionListModel
-import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.components.JBList
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
@@ -26,7 +25,7 @@ data class FileListItem(
     val path: Path,
     val fileName: String,
     val secondaryPath: String?,
-    val highlightIndexes: Set<Int>,
+    val highlightRanges: List<com.github.reonaore.fuzzyfinderintellijplugin.services.TextRange>,
     val icon: Icon,
 )
 
@@ -48,7 +47,7 @@ fun Path.toFileListItem(basePath: String?, query: String): FileListItem {
         path = this,
         fileName = fileName,
         secondaryPath = secondaryPath,
-        highlightIndexes = fuzzyMatchIndexes(fileName, query).toSet(),
+        highlightRanges = contiguousHighlightRanges(fuzzyMatchIndexes(fileName, query).toSet()),
         icon = fileIcon(),
     )
 }
@@ -96,29 +95,6 @@ internal fun fuzzyMatchIndexes(text: String, query: String): List<Int> {
     return matches
 }
 
-internal fun contiguousHighlightRanges(highlightIndexes: Set<Int>): List<IntRange> {
-    if (highlightIndexes.isEmpty()) return emptyList()
-
-    val sortedIndexes = highlightIndexes.sorted()
-    val ranges = mutableListOf<IntRange>()
-    var rangeStart = sortedIndexes.first()
-    var previousIndex = rangeStart
-
-    for (index in sortedIndexes.drop(1)) {
-        if (index == previousIndex + 1) {
-            previousIndex = index
-            continue
-        }
-
-        ranges += rangeStart..previousIndex
-        rangeStart = index
-        previousIndex = index
-    }
-
-    ranges += rangeStart..previousIndex
-    return ranges
-}
-
 fun fuzzyFinderFileList(
     data: PathList = PathList(),
     onCellSelected: ((ListSelectionEvent) -> Unit)? = null,
@@ -143,7 +119,7 @@ private class FileListItemRenderer : ListCellRenderer<FileListItem> {
     private val panel = JPanel(BorderLayout(JBUI.scale(8), 0))
     private val iconLabel = JLabel()
     private val textPanel = JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(6), 0))
-    private val fileNameLabel = HighlightedNameComponent()
+    private val fileNameLabel = HighlightedTextComponent()
     private val secondaryPathLabel = JLabel()
 
     init {
@@ -182,32 +158,7 @@ private class FileListItemRenderer : ListCellRenderer<FileListItem> {
         secondaryPathLabel.isOpaque = false
         fileNameLabel.foreground = primaryForeground
         fileNameLabel.background = background
-        fileNameLabel.applyHighlight(value.fileName, value.highlightIndexes, primaryForeground)
+        fileNameLabel.applyHighlight(value.fileName, value.highlightRanges, primaryForeground)
         return panel
-    }
-}
-
-private class HighlightedNameComponent : com.intellij.ui.SimpleColoredComponent() {
-    fun applyHighlight(text: String, highlightIndexes: Set<Int>, foregroundColor: java.awt.Color) {
-        clear()
-        val plain = SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, foregroundColor)
-        val highlighted = SimpleTextAttributes(SimpleTextAttributes.STYLE_SEARCH_MATCH, foregroundColor)
-
-        if (highlightIndexes.isEmpty()) {
-            append(text, plain)
-            return
-        }
-
-        var start = 0
-        contiguousHighlightRanges(highlightIndexes).forEach { range ->
-            if (range.first > start) {
-                append(text.substring(start, range.first), plain)
-            }
-            append(text.substring(range.first, range.last + 1), highlighted)
-            start = range.last + 1
-        }
-        if (start < text.length) {
-            append(text.substring(start), plain)
-        }
     }
 }

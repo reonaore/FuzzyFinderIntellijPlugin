@@ -3,6 +3,10 @@
 # FuzzyFinderIntellijPlugin Changelog
 
 ## [Unreleased]
+### Added
+- Live Grep dialog powered by `rg` with smart-case regex matching
+- Configurable executable path for `rg`
+- Match highlighting in Live Grep result rows and previews
 
 ## [0.1.0] - 2026-04-23
 ### Added

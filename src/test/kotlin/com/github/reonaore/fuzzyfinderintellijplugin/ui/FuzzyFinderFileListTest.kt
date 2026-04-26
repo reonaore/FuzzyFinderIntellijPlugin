@@ -1,5 +1,6 @@
 package com.github.reonaore.fuzzyfinderintellijplugin.ui
 
+import com.github.reonaore.fuzzyfinderintellijplugin.services.TextRange
 import junit.framework.TestCase.assertEquals
 import junit.framework.TestCase.assertNull
 import org.junit.Test
@@ -46,13 +47,13 @@ class FuzzyFinderFileListTest {
     @Test
     fun groupsContiguousHighlightIndexesIntoSingleRanges() {
         assertEquals(
-            listOf(0..2, 5..6, 9..9),
+            listOf(TextRange(0, 3), TextRange(5, 7), TextRange(9, 10)),
             contiguousHighlightRanges(setOf(0, 1, 2, 5, 6, 9)),
         )
     }
 
     @Test
     fun returnsEmptyRangesWhenThereAreNoHighlights() {
-        assertEquals(emptyList<IntRange>(), contiguousHighlightRanges(emptySet()))
+        assertEquals(emptyList<TextRange>(), contiguousHighlightRanges(emptySet()))
     }
 }

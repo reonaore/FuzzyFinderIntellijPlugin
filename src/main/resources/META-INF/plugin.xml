@@ -25,5 +25,12 @@
                 description="Search project files with fd and fzf">
             <add-to-group group-id="ToolsMenu" anchor="last" />
         </action>
+        <action
+                id="com.github.reonaore.fuzzyfinderintellijplugin.actions.OpenLiveGrepAction"
+                class="com.github.reonaore.fuzzyfinderintellijplugin.actions.OpenLiveGrepAction"
+                text="Open Live Grep"
+                description="Search project text with rg">
+            <add-to-group group-id="ToolsMenu" anchor="last" />
+        </action>
     </actions>
 </idea-plugin>

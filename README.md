@@ -5,16 +5,18 @@
 [![Downloads](https://img.shields.io/jetbrains/plugin/d/MARKETPLACE_ID.svg)](https://plugins.jetbrains.com/plugin/31449-fuzzy-finder)
 
 <!-- Plugin description -->
-Fuzzy Finder adds a lightweight file search dialog to IntelliJ-based IDEs by combining
+Fuzzy Finder adds lightweight search dialogs to IntelliJ-based IDEs by combining
 [`fd`](https://github.com/sharkdp/fd) for fast candidate discovery and
-[`fzf`](https://github.com/junegunn/fzf) for ranked filtering.
+[`fzf`](https://github.com/junegunn/fzf) for ranked filtering, plus
+[`ripgrep`](https://github.com/BurntSushi/ripgrep) for live text search.
 
-The plugin opens a modeless dialog with:
+The plugin opens modeless dialogs with:
 
 - incremental file search backed by `fzf --filter`
+- live grep backed by `rg` with smart-case regex matching
 - a live file preview pane with syntax highlighting
 - filters for file type, hidden files, symlink handling, and ignore rules
-- configurable executable paths for `fd` and `fzf`
+- configurable executable paths for `fd`, `fzf`, and `rg`
 - project-root aware search scoped to IntelliJ content roots
 
 ![Fuzzy Finder search dialog](assets/fuzzy-file-finder-preview.png)
@@ -25,24 +27,26 @@ The plugin opens a modeless dialog with:
 - IntelliJ IDEA 2026.1 or newer
 - `fd` available on `PATH`, or configured in Settings
 - `fzf` available on `PATH`, or configured in Settings
+- `rg` available on `PATH`, or configured in Settings
 
 ## Getting Started
 
-Fuzzy Finder depends on the external `fd` and `fzf` commands. The plugin does not bundle
+Fuzzy Finder depends on the external `fd`, `fzf`, and `rg` commands. The plugin does not bundle
 these executables, so install them before using the plugin.
 
-### 1. Install `fd` and `fzf`
+### 1. Install `fd`, `fzf`, and `rg`
 
 On macOS with Homebrew:
 
 ```shell
-brew install fd fzf
+brew install fd fzf ripgrep
 ```
 
 On other platforms, follow the official installation guides:
 
 - [`fd` installation](https://github.com/sharkdp/fd#installation)
 - [`fzf` installation](https://github.com/junegunn/fzf#installation)
+- [`ripgrep` installation](https://github.com/BurntSushi/ripgrep#installation)
 
 ### 2. Check the executable paths
 
@@ -51,54 +55,62 @@ Make sure both commands are available from your shell:
 ```shell
 which fd
 which fzf
+which rg
 ```
 
-If both commands return paths, the plugin can usually use them without additional configuration.
+If the commands return paths, the plugin can usually use them without additional configuration.
 
 ### 3. Configure paths in the IDE if needed
 
-If IntelliJ IDEA cannot find `fd` or `fzf`, configure the executable paths manually:
+If IntelliJ IDEA cannot find `fd`, `fzf`, or `rg`, configure the executable paths manually:
 
 1. Open `Settings/Preferences | Tools | Fuzzy Finder`.
 2. Set the `fd executable path`.
 3. Set the `fzf executable path`.
-4. Apply the changes.
+4. Set the `rg executable path`.
+5. Apply the changes.
 
 For example, Homebrew installations may use paths such as:
 
 ```text
 /opt/homebrew/bin/fd
 /opt/homebrew/bin/fzf
+/opt/homebrew/bin/rg
 ```
 
-Leave the fields blank to use `fd` and `fzf` from `PATH`.
+Leave the fields blank to use `fd`, `fzf`, and `rg` from `PATH`.
 
 ### 4. Open Fuzzy Finder
 
 Open `Tools | Open Fuzzy Finder`, type a query, and press `Enter` to open the selected file.
+Open `Tools | Open Live Grep`, type a ripgrep regex, and press `Enter` to open the selected match.
 
 ## Usage
 
 Open `Tools | Open Fuzzy Finder`, type a query, then press `Enter` to open the selected file.
+Open `Tools | Open Live Grep`, type a ripgrep regex, then press `Enter` to jump to the selected match.
 
-The dialog supports:
+The dialogs support:
 
 - `Ctrl+N` to move to the next result
 - `Ctrl+P` to move to the previous result
 - double-click or `Enter` to open the selected file
+- `Alt+H`, `Alt+S`, and `Alt+G` to toggle hidden files, symlink following, and ignore rules
+- `Alt+C` in Live Grep to toggle smart-case matching
 
 Executable paths can be configured in `Settings | Tools | Fuzzy Finder`.
 
 ## Feature Overview
 
 - Find project files quickly with `fd` and rank matches with `fzf --filter`
+- Search project text with `rg` and jump directly to matching lines
 - Preview the current selection without leaving the dialog
 - Narrow results with hidden-file, symlink, ignore-rule, and entry-type options
-- Point the plugin to custom `fd` and `fzf` executables when they are not on `PATH`
+- Point the plugin to custom `fd`, `fzf`, and `rg` executables when they are not on `PATH`
 - Search only within the current project's IntelliJ content roots
 
-The initial public release is intended for local projects that already use `fd` and `fzf`.
-The plugin does not bundle either executable and expects them to be installed separately.
+The initial public release is intended for local projects that already use `fd`, `fzf`, and `rg`.
+The plugin does not bundle these executables and expects them to be installed separately.
 
 ## Installation
 

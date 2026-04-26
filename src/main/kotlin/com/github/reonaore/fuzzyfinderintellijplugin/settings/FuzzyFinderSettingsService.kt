@@ -22,6 +22,7 @@ class FuzzyFinderSettingsService : PersistentStateComponent<FuzzyFinderSettingsS
         val configured = when (command) {
             SupportedCommand.FD -> state.fdExecutablePath
             SupportedCommand.FZF -> state.fzfExecutablePath
+            SupportedCommand.RG -> state.rgExecutablePath
         }.trim()
 
         return configured.ifEmpty { command.defaultExecutable }
@@ -35,9 +36,11 @@ class FuzzyFinderSettingsService : PersistentStateComponent<FuzzyFinderSettingsS
 data class FuzzyFinderSettingsState(
     var fdExecutablePath: String = "",
     var fzfExecutablePath: String = "",
+    var rgExecutablePath: String = "",
 )
 
 enum class SupportedCommand(val defaultExecutable: String) {
     FD("fd"),
     FZF("fzf"),
+    RG("rg"),
 }
