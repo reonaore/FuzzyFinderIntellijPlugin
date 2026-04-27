@@ -3,6 +3,8 @@
 # FuzzyFinderIntellijPlugin Changelog
 
 ## [Unreleased]
+
+## [0.2.1] - 2026-04-27
 ### Added
 - Live Grep now uses the current editor selection as the initial query when opened.
 
