@@ -58,6 +58,17 @@ class FuzzyFinderService(
         )
     }
 
+    suspend fun filterGrepMatches(query: String, matches: List<GrepMatch>, limit: Int = MAX_RESULTS): List<GrepMatch> {
+        val basePath = project.basePath ?: return emptyList()
+
+        return searchEngine.filterGrepMatches(
+            query = query,
+            matches = matches,
+            root = Path.of(basePath),
+            limit = limit,
+        )
+    }
+
     fun notifyError(message: String) {
         NotificationGroupManager.getInstance()
             .getNotificationGroup("Fuzzy Finder Notifications")
