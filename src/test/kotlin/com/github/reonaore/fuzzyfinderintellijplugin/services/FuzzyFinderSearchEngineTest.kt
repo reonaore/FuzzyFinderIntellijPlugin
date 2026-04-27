@@ -3,6 +3,7 @@ package com.github.reonaore.fuzzyfinderintellijplugin.services
 import junit.framework.TestCase.assertEquals
 import kotlinx.coroutines.runBlocking
 import org.junit.Test
+import java.nio.charset.StandardCharsets
 import java.nio.file.Path
 
 class FuzzyFinderSearchEngineTest {
@@ -222,6 +223,108 @@ class FuzzyFinderSearchEngineTest {
         assertEquals(0, result.totalMatches)
         assertEquals(emptyList<GrepMatch>(), result.matches)
         assertEquals(0, runner.calls.size)
+    }
+
+    @Test
+    fun filterGrepMatchesReturnsLimitedCandidatesWithoutRunningFzfForBlankQuery() = runBlocking {
+        val runner = RecordingCommandRunner(outputs = emptyList())
+        val engine = FuzzyFinderSearchEngine(
+            fdExecutable = "fd",
+            fzfExecutable = "fzf",
+            rgExecutable = "rg",
+            runner = runner,
+        )
+        val matches = listOf(
+            grepMatch("/repo/src/App.kt", 12, 5, "fun needle"),
+            grepMatch("/repo/src/Other.kt", 24, 1, "other needle"),
+        )
+
+        val result = engine.filterGrepMatches(
+            query = " ",
+            matches = matches,
+            root = Path.of("/repo"),
+            limit = 1,
+        )
+
+        assertEquals(listOf(matches[0]), result)
+        assertEquals(0, runner.calls.size)
+    }
+
+    @Test
+    fun filterGrepMatchesRunsFzfWithIndexedMatchRecordsAndReordersMatches() = runBlocking {
+        val runner = RecordingCommandRunner(
+            outputs = listOf(
+                "1\tsrc/Other.kt:24:1: other needle\u00000\tsrc/App.kt:12:5: fun needle\u0000".toByteArray(),
+            ),
+        )
+        val engine = FuzzyFinderSearchEngine(
+            fdExecutable = "fd",
+            fzfExecutable = "/usr/local/bin/fzf",
+            rgExecutable = "rg",
+            runner = runner,
+        )
+        val matches = listOf(
+            grepMatch("/repo/src/App.kt", 12, 5, "fun needle"),
+            grepMatch("/repo/src/Other.kt", 24, 1, "other needle"),
+        )
+
+        val result = engine.filterGrepMatches(
+            query = "oth",
+            matches = matches,
+            root = Path.of("/repo"),
+        )
+
+        assertEquals(listOf(matches[1], matches[0]), result)
+        assertEquals(1, runner.calls.size)
+        assertEquals(
+            CommandSpec(
+                executable = "/usr/local/bin/fzf",
+                parameters = listOf(
+                    "--filter", "oth",
+                    "--read0",
+                    "--print0",
+                    "--delimiter", "\t",
+                    "--with-nth", "2..",
+                ),
+            ),
+            runner.calls.single().command,
+        )
+        assertEquals(setOf(1), runner.calls.single().noMatchExitCodes)
+        assertEquals(
+            "0\tsrc/App.kt:12:5: fun needle\u00001\tsrc/Other.kt:24:1: other needle\u0000",
+            runner.calls.single().stdin?.toString(StandardCharsets.UTF_8),
+        )
+    }
+
+    @Test
+    fun filterGrepMatchesReturnsEmptyListForFzfNoMatchOutput() = runBlocking {
+        val runner = RecordingCommandRunner(outputs = listOf(ByteArray(0)))
+        val engine = FuzzyFinderSearchEngine(
+            fdExecutable = "fd",
+            fzfExecutable = "fzf",
+            rgExecutable = "rg",
+            runner = runner,
+        )
+
+        val result = engine.filterGrepMatches(
+            query = "missing",
+            matches = listOf(grepMatch("/repo/src/App.kt", 12, 5, "fun needle")),
+            root = Path.of("/repo"),
+        )
+
+        assertEquals(emptyList<GrepMatch>(), result)
+        assertEquals(1, runner.calls.size)
+        assertEquals(setOf(1), runner.calls.single().noMatchExitCodes)
+    }
+
+    private fun grepMatch(path: String, line: Int, column: Int, lineText: String): GrepMatch {
+        return GrepMatch(
+            path = Path.of(path),
+            line = line,
+            column = column,
+            lineText = lineText,
+            matchRanges = listOf(TextRange((column - 1).coerceAtLeast(0), column)),
+        )
     }
 
     private data class Invocation(
