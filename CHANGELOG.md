@@ -3,6 +3,11 @@
 # FuzzyFinderIntellijPlugin Changelog
 
 ## [Unreleased]
+### Added
+- Live Grep results can now be narrowed with an `fzf` fuzzy filter after running the `rg` regex search.
+
+### Fixed
+- Live Grep preview scrolling now works correctly when the dialog opens with the current editor selection as the initial query.
 
 ## [0.2.1] - 2026-04-27
 ### Added
