@@ -36,6 +36,7 @@ import javax.swing.Action
 import javax.swing.JComponent
 import javax.swing.JPanel
 import javax.swing.KeyStroke
+import javax.swing.SwingUtilities
 import javax.swing.Timer
 import javax.swing.event.ListSelectionEvent
 
@@ -63,6 +64,7 @@ class LiveGrepDialog(
     private var previewJob: Job? = null
     private var cachedRgMatches: List<GrepMatch> = emptyList()
     private var visibleMatches: List<GrepMatch> = emptyList()
+    private var suppressRgSearchEvents = false
     private var suppressFzfSearchEvents = false
     private val rgSearchTimer = Timer(SEARCH_DEBOUNCE_MS) { triggerRgSearch() }.apply {
         isRepeats = false
@@ -71,7 +73,9 @@ class LiveGrepDialog(
         isRepeats = false
     }
     private val searchField = fuzzyFinderSearchTextField(placeHolderText = MyBundle.message("dialog.grep.search.placeholder")) {
-        handleRgQueryChanged()
+        if (!suppressRgSearchEvents) {
+            handleRgQueryChanged()
+        }
     }
     private val fzfSearchField = fuzzyFinderSearchTextField(placeHolderText = MyBundle.message("dialog.grep.fuzzy.placeholder")) {
         if (!suppressFzfSearchEvents) {
@@ -174,9 +178,18 @@ class LiveGrepDialog(
     private fun applyInitialQuery() {
         if (initialQuery.isBlank()) return
 
-        searchField.text = initialQuery
-        searchField.textEditor.caretPosition = initialQuery.length
-        rgSearchTimer.restart()
+        suppressRgSearchEvents = true
+        try {
+            searchField.text = initialQuery
+            searchField.textEditor.caretPosition = initialQuery.length
+        } finally {
+            suppressRgSearchEvents = false
+        }
+        SwingUtilities.invokeLater {
+            if (!isDisposed) {
+                rgSearchTimer.restart()
+            }
+        }
     }
 
     private fun clearFzfQuery() {
