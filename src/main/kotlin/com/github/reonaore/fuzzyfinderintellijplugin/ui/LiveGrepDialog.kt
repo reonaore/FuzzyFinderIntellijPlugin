@@ -39,7 +39,10 @@ import javax.swing.KeyStroke
 import javax.swing.Timer
 import javax.swing.event.ListSelectionEvent
 
-class LiveGrepDialog(private val project: Project) : DialogWrapper(project, false) {
+class LiveGrepDialog(
+    private val project: Project,
+    private val initialQuery: String = "",
+) : DialogWrapper(project, false) {
 
     private val service = project.service<FuzzyFinderService>()
     private val optionsPanel = LiveGrepOptionsPanel { searchTimer.restart() }
@@ -71,6 +74,7 @@ class LiveGrepDialog(private val project: Project) : DialogWrapper(project, fals
         setOKButtonText(MyBundle.message("dialog.open"))
         isOKActionEnabled = false
         init()
+        applyInitialQuery()
     }
 
     override fun createCenterPanel(): JComponent {
@@ -140,6 +144,14 @@ class LiveGrepDialog(private val project: Project) : DialogWrapper(project, fals
                 }
             }
         }
+    }
+
+    private fun applyInitialQuery() {
+        if (initialQuery.isBlank()) return
+
+        searchField.text = initialQuery
+        searchField.textEditor.caretPosition = initialQuery.length
+        searchTimer.restart()
     }
 
     private suspend fun applySearchResult(searchResult: GrepSearchResult) {
