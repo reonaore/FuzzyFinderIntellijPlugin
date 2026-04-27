@@ -4,6 +4,7 @@ import com.github.reonaore.fuzzyfinderintellijplugin.MyBundle
 import com.github.reonaore.fuzzyfinderintellijplugin.ui.LiveGrepDialog
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.actionSystem.CommonDataKeys
 import com.intellij.openapi.project.DumbAwareAction
 
 class OpenLiveGrepAction : DumbAwareAction() {
@@ -18,6 +19,18 @@ class OpenLiveGrepAction : DumbAwareAction() {
 
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return
-        LiveGrepDialog(project).show()
+        val initialQuery = initialLiveGrepQueryFromSelection(
+            CommonDataKeys.EDITOR.getData(e.dataContext)?.selectionModel?.selectedText,
+        )
+
+        LiveGrepDialog(project, initialQuery).show()
     }
+}
+
+internal fun initialLiveGrepQueryFromSelection(selectedText: String?): String {
+    return selectedText
+        ?.lineSequence()
+        ?.map(String::trim)
+        ?.firstOrNull(String::isNotEmpty)
+        .orEmpty()
 }
