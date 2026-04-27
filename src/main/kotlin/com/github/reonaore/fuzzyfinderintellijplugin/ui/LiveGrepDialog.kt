@@ -60,7 +60,8 @@ class LiveGrepDialog(
     }
     private val preview = FuzzyFinderPreview(project)
     private val dialogScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    private var searchJob: Job? = null
+    private var rgSearchJob: Job? = null
+    private var fzfSearchJob: Job? = null
     private var previewJob: Job? = null
     private var cachedRgMatches: List<GrepMatch> = emptyList()
     private var visibleMatches: List<GrepMatch> = emptyList()
@@ -153,16 +154,26 @@ class LiveGrepDialog(
     }
 
     private fun triggerRgSearch() {
-        searchJob?.cancel()
+        rgSearchJob?.cancel()
+        fzfSearchJob?.cancel()
         fzfSearchTimer.stop()
         val query = searchField.text
         val options = optionsPanel.currentOptions()
         statusLabel.text = MyBundle.message("dialog.status.searching")
 
-        searchJob = dialogScope.launch(ModalityState.defaultModalityState().asContextElement()) {
+        rgSearchJob = dialogScope.launch(ModalityState.defaultModalityState().asContextElement()) {
             val res = service.grep(query, options, limit = Int.MAX_VALUE)
             cachedRgMatches = res.matches
-            applySearchResult(res.matches.take(MAX_RESULTS), res.totalMatches)
+            val fzfQuery = withContext(Dispatchers.EDT) {
+                fzfSearchField.text
+            }
+            if (fzfQuery.isBlank()) {
+                applySearchResult(res.matches.take(MAX_RESULTS), res.totalMatches)
+            } else {
+                withContext(Dispatchers.EDT) {
+                    startFzfSearch(fzfQuery, showSearching = false)
+                }
+            }
         }.also {
             it.invokeOnCompletion { e ->
                 if (e is FuzzyFinderException) {
@@ -204,19 +215,23 @@ class LiveGrepDialog(
     }
 
     private fun triggerFzfSearch() {
-        searchJob?.cancel()
-        val query = fzfSearchField.text
+        startFzfSearch(fzfSearchField.text)
+    }
+
+    private fun startFzfSearch(query: String, showSearching: Boolean = true) {
+        fzfSearchJob?.cancel()
         if (query.isBlank()) {
-            dialogScope.launch(ModalityState.defaultModalityState().asContextElement()) {
+            fzfSearchJob = dialogScope.launch(ModalityState.defaultModalityState().asContextElement()) {
                 applySearchResult(cachedRgMatches.take(MAX_RESULTS), cachedRgMatches.size)
             }
             return
         }
 
-        statusLabel.text = MyBundle.message("dialog.status.searching")
-        searchJob = dialogScope.launch(ModalityState.defaultModalityState().asContextElement()) {
-            val matches = service.filterGrepMatches(query, cachedRgMatches)
-            applySearchResult(matches, cachedRgMatches.size)
+        if (showSearching) {
+            statusLabel.text = MyBundle.message("dialog.status.searching")
+        }
+        fzfSearchJob = dialogScope.launch(ModalityState.defaultModalityState().asContextElement()) {
+            applyFilteredSearchResult(query)
         }.also {
             it.invokeOnCompletion { e ->
                 if (e is FuzzyFinderException) {
@@ -227,6 +242,11 @@ class LiveGrepDialog(
                 }
             }
         }
+    }
+
+    private suspend fun applyFilteredSearchResult(query: String) {
+        val matches = service.filterGrepMatches(query, cachedRgMatches)
+        applySearchResult(matches, cachedRgMatches.size)
     }
 
     private suspend fun applySearchResult(matches: List<GrepMatch>, totalMatches: Int) {
