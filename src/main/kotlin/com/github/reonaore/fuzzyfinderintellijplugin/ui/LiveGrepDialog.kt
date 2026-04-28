@@ -27,6 +27,7 @@ import kotlinx.coroutines.withContext
 import java.awt.BorderLayout
 import java.awt.Dimension
 import java.awt.GridLayout
+import java.awt.Toolkit
 import java.awt.event.ActionEvent
 import java.awt.event.KeyEvent
 import javax.swing.AbstractAction
@@ -311,6 +312,10 @@ class LiveGrepDialog(
 
         inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_N, KeyEvent.CTRL_DOWN_MASK), ACTION_SELECT_NEXT)
         inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_P, KeyEvent.CTRL_DOWN_MASK), ACTION_SELECT_PREVIOUS)
+        inputMap.put(
+            KeyStroke.getKeyStroke(KeyEvent.VK_F, Toolkit.getDefaultToolkit().menuShortcutKeyMaskEx),
+            ACTION_FOCUS_SEARCH_FIELD,
+        )
         inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_H, KeyEvent.ALT_DOWN_MASK), ACTION_TOGGLE_INCLUDE_HIDDEN)
         inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_S, KeyEvent.ALT_DOWN_MASK), ACTION_TOGGLE_FOLLOW_SYMLINKS)
         inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_G, KeyEvent.ALT_DOWN_MASK), ACTION_TOGGLE_RESPECT_GITIGNORE)
@@ -324,6 +329,12 @@ class LiveGrepDialog(
         actionMap.put(ACTION_SELECT_PREVIOUS, object : AbstractAction() {
             override fun actionPerformed(event: ActionEvent?) {
                 moveSelectionBy(-1)
+            }
+        })
+        actionMap.put(ACTION_FOCUS_SEARCH_FIELD, object : AbstractAction() {
+            override fun actionPerformed(event: ActionEvent?) {
+                searchField.textEditor.requestFocusInWindow()
+                searchField.textEditor.selectAll()
             }
         })
         actionMap.put(ACTION_TOGGLE_INCLUDE_HIDDEN, object : AbstractAction() {
@@ -375,6 +386,7 @@ class LiveGrepDialog(
     private companion object {
         const val ACTION_SELECT_NEXT = "liveGrep.selectNextCandidate"
         const val ACTION_SELECT_PREVIOUS = "liveGrep.selectPreviousCandidate"
+        const val ACTION_FOCUS_SEARCH_FIELD = "liveGrep.focusSearchField"
         const val ACTION_TOGGLE_INCLUDE_HIDDEN = "liveGrep.toggleIncludeHidden"
         const val ACTION_TOGGLE_FOLLOW_SYMLINKS = "liveGrep.toggleFollowSymlinks"
         const val ACTION_TOGGLE_RESPECT_GITIGNORE = "liveGrep.toggleRespectGitIgnore"
