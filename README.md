@@ -1,8 +1,8 @@
 # FuzzyFinderIntellijPlugin
 
 ![Build](https://github.com/reonaore/FuzzyFinderIntellijPlugin/workflows/Build/badge.svg)
-[![Version](https://img.shields.io/jetbrains/plugin/v/MARKETPLACE_ID.svg)](https://plugins.jetbrains.com/plugin/31449-fuzzy-finder)
-[![Downloads](https://img.shields.io/jetbrains/plugin/d/MARKETPLACE_ID.svg)](https://plugins.jetbrains.com/plugin/31449-fuzzy-finder)
+[![Version](https://img.shields.io/jetbrains/plugin/v/31449-fuzzy-finder.svg)](https://plugins.jetbrains.com/plugin/31449-fuzzy-finder)
+[![Downloads](https://img.shields.io/jetbrains/plugin/d/31449-fuzzy-finder.svg)](https://plugins.jetbrains.com/plugin/31449-fuzzy-finder)
 
 <!-- Plugin description -->
 Fuzzy Finder adds lightweight search dialogs to IntelliJ-based IDEs by combining
@@ -16,10 +16,13 @@ The plugin opens modeless dialogs with:
 - live grep backed by `rg` with smart-case regex matching
 - a live file preview pane with syntax highlighting
 - filters for file type, hidden files, symlink handling, and ignore rules
+- `Cmd+F` on macOS or `Ctrl+F` on other platforms to refocus the search field
 - configurable executable paths for `fd`, `fzf`, and `rg`
 - project-root aware search scoped to IntelliJ content roots
 
-![Fuzzy Finder search dialog](assets/fuzzy-file-finder-preview.png)
+![Fuzzy Finder search dialog](https://raw.githubusercontent.com/reonaore/FuzzyFinderIntellijPlugin/main/assets/fuzzy-file-finder-preview.png)
+
+![Live Grep search dialog](https://raw.githubusercontent.com/reonaore/FuzzyFinderIntellijPlugin/main/assets/live-grep-preview.png)
 <!-- Plugin description end -->
 
 ## Requirements
@@ -94,6 +97,7 @@ The dialogs support:
 
 - `Ctrl+N` to move to the next result
 - `Ctrl+P` to move to the previous result
+- `Cmd+F` on macOS or `Ctrl+F` on other platforms to refocus the search field
 - double-click or `Enter` to open the selected file
 - `Alt+H`, `Alt+S`, and `Alt+G` to toggle hidden files, symlink following, and ignore rules
 - `Alt+C` in Live Grep to toggle smart-case matching
