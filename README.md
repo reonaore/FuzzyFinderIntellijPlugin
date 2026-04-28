@@ -16,6 +16,7 @@ The plugin opens modeless dialogs with:
 - live grep backed by `rg` with smart-case regex matching
 - a live file preview pane with syntax highlighting
 - filters for file type, hidden files, symlink handling, and ignore rules
+- `Cmd+F` on macOS or `Ctrl+F` on other platforms to refocus the search field
 - configurable executable paths for `fd`, `fzf`, and `rg`
 - project-root aware search scoped to IntelliJ content roots
 
@@ -96,6 +97,7 @@ The dialogs support:
 
 - `Ctrl+N` to move to the next result
 - `Ctrl+P` to move to the previous result
+- `Cmd+F` on macOS or `Ctrl+F` on other platforms to refocus the search field
 - double-click or `Enter` to open the selected file
 - `Alt+H`, `Alt+S`, and `Alt+G` to toggle hidden files, symlink following, and ignore rules
 - `Alt+C` in Live Grep to toggle smart-case matching
