@@ -4,6 +4,17 @@
 
 ## [Unreleased]
 ### Added
+- File search can now filter results by file extension.
+- File search and Live Grep dialogs now focus the search field when opened from the menu shortcut.
+
+### Fixed
+- File search option filters now apply consistently when toggled.
+
+### Changed
+- Marketplace preview images in the README have been updated.
+
+## [0.2.2] - 2026-04-27
+### Added
 - Live Grep results can now be narrowed with an `fzf` fuzzy filter after running the `rg` regex search.
 
 ### Fixed
