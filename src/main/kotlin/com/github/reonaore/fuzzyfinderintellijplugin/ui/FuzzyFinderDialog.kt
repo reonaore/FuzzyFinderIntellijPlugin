@@ -11,6 +11,7 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogWrapper
+import com.intellij.openapi.util.SystemInfo
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.ui.CollectionListModel
@@ -193,6 +194,10 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
 
         inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_N, KeyEvent.CTRL_DOWN_MASK), ACTION_SELECT_NEXT)
         inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_P, KeyEvent.CTRL_DOWN_MASK), ACTION_SELECT_PREVIOUS)
+        inputMap.put(
+            KeyStroke.getKeyStroke(KeyEvent.VK_F, MENU_SHORTCUT_KEY_MASK),
+            ACTION_FOCUS_SEARCH_FIELD,
+        )
         inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_H, KeyEvent.ALT_DOWN_MASK), ACTION_TOGGLE_INCLUDE_HIDDEN)
         inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_S, KeyEvent.ALT_DOWN_MASK), ACTION_TOGGLE_FOLLOW_SYMLINKS)
         inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_G, KeyEvent.ALT_DOWN_MASK), ACTION_TOGGLE_RESPECT_GITIGNORE)
@@ -205,6 +210,12 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
         actionMap.put(ACTION_SELECT_PREVIOUS, object : AbstractAction() {
             override fun actionPerformed(event: ActionEvent?) {
                 moveSelectionBy(-1)
+            }
+        })
+        actionMap.put(ACTION_FOCUS_SEARCH_FIELD, object : AbstractAction() {
+            override fun actionPerformed(event: ActionEvent?) {
+                searchField.textEditor.requestFocusInWindow()
+                searchField.textEditor.selectAll()
             }
         })
         actionMap.put(ACTION_TOGGLE_INCLUDE_HIDDEN, object : AbstractAction() {
@@ -239,9 +250,11 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
     private companion object {
         const val ACTION_SELECT_NEXT = "fuzzyFinder.selectNextCandidate"
         const val ACTION_SELECT_PREVIOUS = "fuzzyFinder.selectPreviousCandidate"
+        const val ACTION_FOCUS_SEARCH_FIELD = "fuzzyFinder.focusSearchField"
         const val ACTION_TOGGLE_INCLUDE_HIDDEN = "fuzzyFinder.toggleIncludeHidden"
         const val ACTION_TOGGLE_FOLLOW_SYMLINKS = "fuzzyFinder.toggleFollowSymlinks"
         const val ACTION_TOGGLE_RESPECT_GITIGNORE = "fuzzyFinder.toggleRespectGitIgnore"
         const val SEARCH_DEBOUNCE_MS = 180
+        val MENU_SHORTCUT_KEY_MASK = if (SystemInfo.isMac) KeyEvent.META_DOWN_MASK else KeyEvent.CTRL_DOWN_MASK
     }
 }

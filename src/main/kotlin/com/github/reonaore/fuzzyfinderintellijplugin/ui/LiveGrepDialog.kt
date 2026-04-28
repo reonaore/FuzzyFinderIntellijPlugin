@@ -12,6 +12,7 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogWrapper
+import com.intellij.openapi.util.SystemInfo
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.ui.CollectionListModel
 import com.intellij.ui.JBSplitter
@@ -311,6 +312,10 @@ class LiveGrepDialog(
 
         inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_N, KeyEvent.CTRL_DOWN_MASK), ACTION_SELECT_NEXT)
         inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_P, KeyEvent.CTRL_DOWN_MASK), ACTION_SELECT_PREVIOUS)
+        inputMap.put(
+            KeyStroke.getKeyStroke(KeyEvent.VK_F, MENU_SHORTCUT_KEY_MASK),
+            ACTION_FOCUS_SEARCH_FIELD,
+        )
         inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_H, KeyEvent.ALT_DOWN_MASK), ACTION_TOGGLE_INCLUDE_HIDDEN)
         inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_S, KeyEvent.ALT_DOWN_MASK), ACTION_TOGGLE_FOLLOW_SYMLINKS)
         inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_G, KeyEvent.ALT_DOWN_MASK), ACTION_TOGGLE_RESPECT_GITIGNORE)
@@ -324,6 +329,12 @@ class LiveGrepDialog(
         actionMap.put(ACTION_SELECT_PREVIOUS, object : AbstractAction() {
             override fun actionPerformed(event: ActionEvent?) {
                 moveSelectionBy(-1)
+            }
+        })
+        actionMap.put(ACTION_FOCUS_SEARCH_FIELD, object : AbstractAction() {
+            override fun actionPerformed(event: ActionEvent?) {
+                searchField.textEditor.requestFocusInWindow()
+                searchField.textEditor.selectAll()
             }
         })
         actionMap.put(ACTION_TOGGLE_INCLUDE_HIDDEN, object : AbstractAction() {
@@ -375,11 +386,13 @@ class LiveGrepDialog(
     private companion object {
         const val ACTION_SELECT_NEXT = "liveGrep.selectNextCandidate"
         const val ACTION_SELECT_PREVIOUS = "liveGrep.selectPreviousCandidate"
+        const val ACTION_FOCUS_SEARCH_FIELD = "liveGrep.focusSearchField"
         const val ACTION_TOGGLE_INCLUDE_HIDDEN = "liveGrep.toggleIncludeHidden"
         const val ACTION_TOGGLE_FOLLOW_SYMLINKS = "liveGrep.toggleFollowSymlinks"
         const val ACTION_TOGGLE_RESPECT_GITIGNORE = "liveGrep.toggleRespectGitIgnore"
         const val ACTION_TOGGLE_SMART_CASE = "liveGrep.toggleSmartCase"
         const val SEARCH_DEBOUNCE_MS = 180
         const val MAX_RESULTS = 200
+        val MENU_SHORTCUT_KEY_MASK = if (SystemInfo.isMac) KeyEvent.META_DOWN_MASK else KeyEvent.CTRL_DOWN_MASK
     }
 }
