@@ -1,8 +1,8 @@
 # FuzzyFinderIntellijPlugin
 
 ![Build](https://github.com/reonaore/FuzzyFinderIntellijPlugin/workflows/Build/badge.svg)
-[![Version](https://img.shields.io/jetbrains/plugin/v/MARKETPLACE_ID.svg)](https://plugins.jetbrains.com/plugin/31449-fuzzy-finder)
-[![Downloads](https://img.shields.io/jetbrains/plugin/d/MARKETPLACE_ID.svg)](https://plugins.jetbrains.com/plugin/31449-fuzzy-finder)
+[![Version](https://img.shields.io/jetbrains/plugin/v/31449-fuzzy-finder.svg)](https://plugins.jetbrains.com/plugin/31449-fuzzy-finder)
+[![Downloads](https://img.shields.io/jetbrains/plugin/d/31449-fuzzy-finder.svg)](https://plugins.jetbrains.com/plugin/31449-fuzzy-finder)
 
 <!-- Plugin description -->
 Fuzzy Finder adds lightweight search dialogs to IntelliJ-based IDEs by combining
