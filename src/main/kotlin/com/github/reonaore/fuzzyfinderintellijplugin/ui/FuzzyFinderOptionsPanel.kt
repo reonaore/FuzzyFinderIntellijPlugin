@@ -19,6 +19,7 @@ class FuzzyFinderOptionsPanel(
     private val includeHiddenCheckBox = JCheckBox(mnemonicLabel("Hidden", 'H'))
     private val followSymlinksCheckBox = JCheckBox(mnemonicLabel("Follow symlinks", 's'))
     private val respectGitIgnoreCheckBox = JCheckBox(mnemonicLabel(".gitignore", 'g'))
+    private val extensionsField = JBTextField()
     private val excludeField = JBTextField(DEFAULT_EXCLUDES)
 
     init {
@@ -36,6 +37,11 @@ class FuzzyFinderOptionsPanel(
         includeHiddenCheckBox.addActionListener { onOptionsChanged() }
         followSymlinksCheckBox.addActionListener { onOptionsChanged() }
         respectGitIgnoreCheckBox.addActionListener { onOptionsChanged() }
+        extensionsField.document.addDocumentListener(object : DocumentAdapter() {
+            override fun textChanged(e: javax.swing.event.DocumentEvent) {
+                onOptionsChanged()
+            }
+        })
         excludeField.document.addDocumentListener(object : DocumentAdapter() {
             override fun textChanged(e: javax.swing.event.DocumentEvent) {
                 onOptionsChanged()
@@ -50,6 +56,9 @@ class FuzzyFinderOptionsPanel(
             add(includeHiddenCheckBox)
             add(followSymlinksCheckBox)
             add(respectGitIgnoreCheckBox)
+            add(JLabel("Extensions"))
+            extensionsField.columns = 12
+            add(extensionsField)
             add(JLabel("Exclude"))
             excludeField.columns = 20
             add(excludeField)
@@ -62,11 +71,16 @@ class FuzzyFinderOptionsPanel(
             includeHidden = includeHiddenCheckBox.isSelected,
             followSymlinks = followSymlinksCheckBox.isSelected,
             respectGitIgnore = respectGitIgnoreCheckBox.isSelected,
-            excludePatterns = excludeField.text
-                .split(',')
-                .map(String::trim)
-                .filter(String::isNotEmpty),
+            includeExtensions = parseCommaSeparatedText(extensionsField.text),
+            excludePatterns = parseCommaSeparatedText(excludeField.text),
         )
+    }
+
+    private fun parseCommaSeparatedText(text: String): List<String> {
+        return text
+            .split(',')
+            .map(String::trim)
+            .filter(String::isNotEmpty)
     }
 
     fun toggleIncludeHidden() {
@@ -96,6 +110,12 @@ class FuzzyFinderOptionsPanel(
     internal fun followSymlinksTooltipText(): String? = followSymlinksCheckBox.toolTipText
 
     internal fun respectGitIgnoreTooltipText(): String? = respectGitIgnoreCheckBox.toolTipText
+
+    internal fun setExtensionsText(text: String) {
+        extensionsField.text = text
+    }
+
+    internal fun extensionsText(): String = extensionsField.text
 
     companion object {
         const val DEFAULT_EXCLUDES = ".git"

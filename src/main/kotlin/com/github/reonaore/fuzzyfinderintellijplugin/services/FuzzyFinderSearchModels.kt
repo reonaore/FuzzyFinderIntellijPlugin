@@ -39,6 +39,7 @@ data class FdSearchOptions(
     val includeHidden: Boolean = false,
     val followSymlinks: Boolean = true,
     val respectGitIgnore: Boolean = true,
+    val includeExtensions: List<String> = emptyList(),
     val excludePatterns: List<String> = listOf(".git"),
 )
 
@@ -116,6 +117,12 @@ internal fun buildFdParameters(options: FdSearchOptions, root: Path): List<Strin
     if (!options.respectGitIgnore) {
         parameters += "--no-ignore"
     }
+    options.includeExtensions
+        .map(::normalizeExtension)
+        .filter(String::isNotEmpty)
+        .forEach { extension ->
+            parameters += listOf("--extension", extension)
+        }
     options.excludePatterns
         .map(String::trim)
         .filter(String::isNotEmpty)

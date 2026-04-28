@@ -14,6 +14,7 @@ class FuzzyFinderSearchModelsTest {
                 includeHidden = true,
                 followSymlinks = false,
                 respectGitIgnore = false,
+                includeExtensions = listOf("kt", ".java", " "),
                 excludePatterns = listOf(".git", "node_modules"),
             ),
             Path.of("/repo"),
@@ -25,8 +26,29 @@ class FuzzyFinderSearchModelsTest {
                 "--absolute-path",
                 "--hidden",
                 "--no-ignore",
+                "--extension", "kt",
+                "--extension", "java",
                 "--exclude", ".git",
                 "--exclude", "node_modules",
+                "--print0", ".", "/repo",
+            ),
+            parameters,
+        )
+    }
+
+    @Test
+    fun ignoresBlankFdExtensionFilters() {
+        val parameters = buildFdParameters(
+            FdSearchOptions(includeExtensions = listOf(" ", "")),
+            Path.of("/repo"),
+        )
+
+        assertEquals(
+            listOf(
+                "--type", "f",
+                "--absolute-path",
+                "--follow",
+                "--exclude", ".git",
                 "--print0", ".", "/repo",
             ),
             parameters,

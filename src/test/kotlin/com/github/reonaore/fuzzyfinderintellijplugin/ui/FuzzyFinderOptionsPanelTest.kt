@@ -48,6 +48,26 @@ class FuzzyFinderOptionsPanelTest {
     }
 
     @Test
+    fun parsesCommaSeparatedExtensionFilters() {
+        val panel = FuzzyFinderOptionsPanel { }
+
+        panel.setExtensionsText(" kt, .java,  ,md ")
+
+        assertEquals(listOf("kt", ".java", "md"), panel.currentOptions().includeExtensions)
+    }
+
+    @Test
+    fun notifiesWhenExtensionFiltersChange() {
+        var changes = 0
+        val panel = FuzzyFinderOptionsPanel { changes++ }
+
+        panel.setExtensionsText("kt")
+
+        assertEquals("kt", panel.extensionsText())
+        assertEquals(1, changes)
+    }
+
+    @Test
     fun checkboxLabelsUnderlineTheShortcutCharacter() {
         val panel = FuzzyFinderOptionsPanel { }
 

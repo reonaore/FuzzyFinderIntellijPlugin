@@ -7,8 +7,6 @@ import com.github.reonaore.fuzzyfinderintellijplugin.services.SearchResult
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.application.asContextElement
-import com.intellij.openapi.application.readAction
-import com.intellij.openapi.application.writeAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.project.Project
@@ -162,14 +160,18 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
     private fun updatePreview(@Suppress("UNUSED_PARAMETER") event: ListSelectionEvent? = null) {
         previewJob?.cancel()
         previewJob = dialogScope.launch(ModalityState.defaultModalityState().asContextElement()) {
-            val selected = readAction {
+            val selected = withContext(Dispatchers.EDT) {
                 resultList.selectedValue?.path
             } ?: run {
-                writeAction { isOKActionEnabled = false }
+                withContext(Dispatchers.EDT) {
+                    isOKActionEnabled = false
+                }
                 preview.show(PreviewContent.empty)
                 return@launch
             }
-            writeAction { isOKActionEnabled = true }
+            withContext(Dispatchers.EDT) {
+                isOKActionEnabled = true
+            }
             val previewContent = previewLoader.load(selected)
             preview.show(previewContent)
         }
