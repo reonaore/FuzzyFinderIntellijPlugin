@@ -4,7 +4,9 @@ import com.github.reonaore.fuzzyfinderintellijplugin.services.FdEntryType
 import com.github.reonaore.fuzzyfinderintellijplugin.services.FdSearchOptions
 import com.intellij.ui.DocumentAdapter
 import com.intellij.ui.components.JBTextField
-import java.awt.FlowLayout
+import java.awt.GridBagConstraints
+import java.awt.GridBagLayout
+import java.awt.Insets
 import java.awt.event.KeyEvent
 import javax.swing.JCheckBox
 import javax.swing.JComboBox
@@ -21,6 +23,16 @@ class FuzzyFinderOptionsPanel(
     private val respectGitIgnoreCheckBox = JCheckBox(mnemonicLabel(".gitignore", 'g'))
     private val extensionsField = JBTextField()
     private val excludeField = JBTextField(DEFAULT_EXCLUDES)
+    private val extensionsLabel = JLabel(mnemonicLabel("Extensions", 'E')).apply {
+        displayedMnemonic = KeyEvent.VK_E
+        labelFor = extensionsField
+        toolTipText = ALT_E_TOOLTIP
+    }
+    private val excludeLabel = JLabel(mnemonicLabel("Exclude", 'x')).apply {
+        displayedMnemonic = KeyEvent.VK_X
+        labelFor = excludeField
+        toolTipText = ALT_X_TOOLTIP
+    }
 
     init {
         typeComboBox.selectedItem = FdEntryType.FILES
@@ -50,18 +62,27 @@ class FuzzyFinderOptionsPanel(
     }
 
     fun component(): JComponent {
-        return JPanel(FlowLayout(FlowLayout.LEFT, 8, 0)).apply {
-            add(JLabel("Type"))
-            add(typeComboBox)
-            add(includeHiddenCheckBox)
-            add(followSymlinksCheckBox)
-            add(respectGitIgnoreCheckBox)
-            add(JLabel("Extensions"))
+        return JPanel(GridBagLayout()).apply {
             extensionsField.columns = 12
-            add(extensionsField)
-            add(JLabel("Exclude"))
             excludeField.columns = 20
-            add(excludeField)
+
+            addOptionComponent(JLabel("Type"), gridx = 0, gridy = 0)
+            addOptionComponent(typeComboBox, gridx = 1, gridy = 0)
+            addOptionComponent(includeHiddenCheckBox, gridx = 2, gridy = 0)
+            addOptionComponent(followSymlinksCheckBox, gridx = 3, gridy = 0)
+            addOptionComponent(respectGitIgnoreCheckBox, gridx = 4, gridy = 0, weightx = 1.0)
+            addOptionComponent(extensionsLabel, gridx = 0, gridy = 1, topInset = 4)
+            addOptionComponent(extensionsField, gridx = 1, gridy = 1, topInset = 4)
+            addOptionComponent(excludeLabel, gridx = 2, gridy = 1, topInset = 4)
+            addOptionComponent(
+                excludeField,
+                gridx = 3,
+                gridy = 1,
+                gridwidth = 2,
+                weightx = 1.0,
+                fill = GridBagConstraints.HORIZONTAL,
+                topInset = 4,
+            )
         }
     }
 
@@ -117,11 +138,41 @@ class FuzzyFinderOptionsPanel(
 
     internal fun extensionsText(): String = extensionsField.text
 
+    internal fun setExcludeText(text: String) {
+        excludeField.text = text
+    }
+
+    internal fun excludeText(): String = excludeField.text
+
+    internal fun excludeFieldIsEditable(): Boolean = excludeField.isEditable
+
+    internal fun extensionsLabelText(): String = extensionsLabel.text
+
+    internal fun extensionsLabelMnemonic(): Int = extensionsLabel.displayedMnemonic
+
+    internal fun extensionsLabelTarget(): JComponent? = extensionsLabel.labelFor as? JComponent
+
+    internal fun extensionsFieldComponent(): JComponent = extensionsField
+
+    internal fun extensionsTooltipText(): String? = extensionsLabel.toolTipText
+
+    internal fun excludeLabelText(): String = excludeLabel.text
+
+    internal fun excludeLabelMnemonic(): Int = excludeLabel.displayedMnemonic
+
+    internal fun excludeLabelTarget(): JComponent? = excludeLabel.labelFor as? JComponent
+
+    internal fun excludeFieldComponent(): JComponent = excludeField
+
+    internal fun excludeTooltipText(): String? = excludeLabel.toolTipText
+
     companion object {
         const val DEFAULT_EXCLUDES = ".git"
         const val ALT_H_TOOLTIP = "Alt+H"
         const val ALT_S_TOOLTIP = "Alt+S"
         const val ALT_G_TOOLTIP = "Alt+G"
+        const val ALT_E_TOOLTIP = "Alt+E"
+        const val ALT_X_TOOLTIP = "Alt+X"
 
         fun mnemonicLabel(label: String, mnemonicChar: Char): String {
             var underlined = false
@@ -147,4 +198,27 @@ class FuzzyFinderOptionsPanel(
             }
         }
     }
+}
+
+private fun JPanel.addOptionComponent(
+    component: JComponent,
+    gridx: Int,
+    gridy: Int,
+    gridwidth: Int = 1,
+    weightx: Double = 0.0,
+    fill: Int = GridBagConstraints.NONE,
+    topInset: Int = 0,
+) {
+    add(
+        component,
+        GridBagConstraints().apply {
+            this.gridx = gridx
+            this.gridy = gridy
+            this.gridwidth = gridwidth
+            this.weightx = weightx
+            this.fill = fill
+            anchor = GridBagConstraints.WEST
+            insets = Insets(topInset, 0, 0, 8)
+        },
+    )
 }
