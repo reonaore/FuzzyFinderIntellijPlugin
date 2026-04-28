@@ -19,7 +19,9 @@ The plugin opens modeless dialogs with:
 - configurable executable paths for `fd`, `fzf`, and `rg`
 - project-root aware search scoped to IntelliJ content roots
 
-![Fuzzy Finder search dialog](assets/fuzzy-file-finder-preview.png)
+![Fuzzy Finder search dialog](https://raw.githubusercontent.com/reonaore/FuzzyFinderIntellijPlugin/main/assets/fuzzy-file-finder-preview.png)
+
+![Live Grep search dialog](https://raw.githubusercontent.com/reonaore/FuzzyFinderIntellijPlugin/main/assets/live-grep-preview.png)
 <!-- Plugin description end -->
 
 ## Requirements
