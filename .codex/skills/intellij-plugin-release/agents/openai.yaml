@@ -1,0 +1,4 @@
+interface:
+  display_name: "IntelliJ Plugin Release"
+  short_description: "Release IntelliJ plugins to Marketplace"
+  default_prompt: "Use $intellij-plugin-release to prepare and publish a Gradle-based IntelliJ plugin release."
