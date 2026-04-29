@@ -64,14 +64,20 @@ class LiveGrepOptionsPanelTest {
     }
 
     @Test
-    fun filterLabelsFocusTheirFieldsWithAltShortcuts() {
+    fun filterLabelsUnderlineTheShortcutCharacter() {
         val panel = LiveGrepOptionsPanel { }
 
         assertEquals("<html><u>E</u>xtensions</html>", panel.extensionsLabelText())
+        assertEquals("<html>E<u>x</u>clude</html>", panel.excludeLabelText())
+    }
+
+    @Test
+    fun filterLabelsFocusTheirFieldsWithAltShortcuts() {
+        val panel = LiveGrepOptionsPanel { }
+
         assertEquals(KeyEvent.VK_E, panel.extensionsLabelMnemonic())
         assertSame(panel.extensionsFieldComponent(), panel.extensionsLabelTarget())
         assertEquals("Alt+E", panel.extensionsTooltipText())
-        assertEquals("<html>E<u>x</u>clude</html>", panel.excludeLabelText())
         assertEquals(KeyEvent.VK_X, panel.excludeLabelMnemonic())
         assertSame(panel.excludeFieldComponent(), panel.excludeLabelTarget())
         assertEquals("Alt+X", panel.excludeTooltipText())
