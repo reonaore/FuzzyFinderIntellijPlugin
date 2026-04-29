@@ -19,6 +19,16 @@ class LiveGrepOptionsPanel(
     private val smartCaseCheckBox = JCheckBox(FuzzyFinderOptionsPanel.mnemonicLabel("Smart case", 'c'))
     private val extensionsField = JBTextField()
     private val excludeField = JBTextField(DEFAULT_EXCLUDES)
+    private val extensionsLabel = JLabel(FuzzyFinderOptionsPanel.mnemonicLabel("Extensions", 'E')).apply {
+        displayedMnemonic = KeyEvent.VK_E
+        labelFor = extensionsField
+        toolTipText = ALT_E_TOOLTIP
+    }
+    private val excludeLabel = JLabel(FuzzyFinderOptionsPanel.mnemonicLabel("Exclude", 'x')).apply {
+        displayedMnemonic = KeyEvent.VK_X
+        labelFor = excludeField
+        toolTipText = ALT_X_TOOLTIP
+    }
 
     init {
         followSymlinksCheckBox.isSelected = true
@@ -55,10 +65,10 @@ class LiveGrepOptionsPanel(
             add(followSymlinksCheckBox)
             add(respectGitIgnoreCheckBox)
             add(smartCaseCheckBox)
-            add(JLabel("Extensions"))
+            add(extensionsLabel)
             extensionsField.columns = 12
             add(extensionsField)
-            add(JLabel("Exclude"))
+            add(excludeLabel)
             excludeField.columns = 20
             add(excludeField)
         }
@@ -124,11 +134,33 @@ class LiveGrepOptionsPanel(
 
     internal fun smartCaseTooltipText(): String? = smartCaseCheckBox.toolTipText
 
+    internal fun extensionsLabelText(): String = extensionsLabel.text
+
+    internal fun extensionsLabelMnemonic(): Int = extensionsLabel.displayedMnemonic
+
+    internal fun extensionsLabelTarget(): JComponent? = extensionsLabel.labelFor as? JComponent
+
+    internal fun extensionsFieldComponent(): JComponent = extensionsField
+
+    internal fun extensionsTooltipText(): String? = extensionsLabel.toolTipText
+
+    internal fun excludeLabelText(): String = excludeLabel.text
+
+    internal fun excludeLabelMnemonic(): Int = excludeLabel.displayedMnemonic
+
+    internal fun excludeLabelTarget(): JComponent? = excludeLabel.labelFor as? JComponent
+
+    internal fun excludeFieldComponent(): JComponent = excludeField
+
+    internal fun excludeTooltipText(): String? = excludeLabel.toolTipText
+
     private companion object {
         const val DEFAULT_EXCLUDES = ".git"
         const val ALT_H_TOOLTIP = "Alt+H"
         const val ALT_S_TOOLTIP = "Alt+S"
         const val ALT_G_TOOLTIP = "Alt+G"
         const val ALT_C_TOOLTIP = "Alt+C"
+        const val ALT_E_TOOLTIP = "Alt+E"
+        const val ALT_X_TOOLTIP = "Alt+X"
     }
 }
