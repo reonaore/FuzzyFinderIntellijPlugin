@@ -18,11 +18,13 @@ class CandidateListLoadingPanel internal constructor(
     private val list: JBList<*>,
     listComponent: JComponent,
     private val busyIndicator: CandidateBusyIndicator,
+    private val initialEmptyText: String = MyBundle.message("dialog.candidates.empty"),
 ) {
     constructor(
         list: JBList<*>,
         listComponent: JComponent,
-    ) : this(list, listComponent, AsyncCandidateBusyIndicator())
+        initialEmptyText: String = MyBundle.message("dialog.candidates.empty"),
+    ) : this(list, listComponent, AsyncCandidateBusyIndicator(), initialEmptyText)
 
     private val messageLabel = JBLabel()
     private val messagePanel = JPanel().apply {
@@ -48,7 +50,7 @@ class CandidateListLoadingPanel internal constructor(
 
     init {
         busyIndicator.stop()
-        list.emptyText.text = MyBundle.message("dialog.candidates.empty")
+        list.emptyText.text = initialEmptyText
     }
 
     fun showSearching(hasExistingCandidates: Boolean) {
@@ -72,6 +74,14 @@ class CandidateListLoadingPanel internal constructor(
         if (!hasCandidates) {
             list.repaint()
         }
+    }
+
+    fun showInitialEmptyText() {
+        state = CandidateListLoadingState.Idle
+        list.emptyText.text = initialEmptyText
+        overlay.isVisible = false
+        busyIndicator.stop()
+        list.repaint()
     }
 
     fun showError() {

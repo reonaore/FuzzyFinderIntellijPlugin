@@ -12,6 +12,24 @@ import org.junit.Test
 class CandidateListLoadingPanelTest {
 
     @Test
+    fun usesNoResultsAsDefaultInitialEmptyText() {
+        val list = JBList<String>()
+
+        candidatePanel(list)
+
+        assertEquals("No results", list.emptyText.text)
+    }
+
+    @Test
+    fun usesCustomInitialEmptyTextBeforeSearchRuns() {
+        val list = JBList<String>()
+
+        candidatePanel(list, initialEmptyText = "Type to search project text.")
+
+        assertEquals("Type to search project text.", list.emptyText.text)
+    }
+
+    @Test
     fun showsSearchingForEmptyCandidateList() {
         val panel = candidatePanel()
 
@@ -38,7 +56,7 @@ class CandidateListLoadingPanelTest {
     @Test
     fun hidesOverlayAndKeepsNoResultsEmptyTextAfterResultsApply() {
         val list = JBList<String>()
-        val panel = candidatePanel(list)
+        val panel = candidatePanel(list, initialEmptyText = "Type to search project text.")
 
         panel.showSearching(hasExistingCandidates = false)
         panel.showResults(hasCandidates = false)
@@ -46,6 +64,20 @@ class CandidateListLoadingPanelTest {
         assertEquals(CandidateListLoadingState.Idle, panel.currentState())
         assertFalse(panel.overlayIsVisible())
         assertEquals("No results", list.emptyText.text)
+    }
+
+    @Test
+    fun restoresCustomInitialEmptyTextWhenReturningToIdlePrompt() {
+        val list = JBList<String>()
+        val panel = candidatePanel(list, initialEmptyText = "Type to search project text.")
+
+        panel.showSearching(hasExistingCandidates = false)
+        panel.showInitialEmptyText()
+
+        assertEquals(CandidateListLoadingState.Idle, panel.currentState())
+        assertFalse(panel.overlayIsVisible())
+        assertFalse(panel.spinnerIsVisible())
+        assertEquals("Type to search project text.", list.emptyText.text)
     }
 
     @Test
@@ -62,8 +94,11 @@ class CandidateListLoadingPanelTest {
         assertEquals("Search failed", list.emptyText.text)
     }
 
-    private fun candidatePanel(list: JBList<String> = JBList()): CandidateListLoadingPanel {
-        return CandidateListLoadingPanel(list, JScrollPane(list), FakeCandidateBusyIndicator())
+    private fun candidatePanel(
+        list: JBList<String> = JBList(),
+        initialEmptyText: String = "No results",
+    ): CandidateListLoadingPanel {
+        return CandidateListLoadingPanel(list, JScrollPane(list), FakeCandidateBusyIndicator(), initialEmptyText)
     }
 
     private class FakeCandidateBusyIndicator : CandidateBusyIndicator {

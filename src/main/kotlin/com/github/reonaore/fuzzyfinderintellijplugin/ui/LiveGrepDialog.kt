@@ -60,6 +60,7 @@ class LiveGrepDialog(
     private val candidateListPanel = CandidateListLoadingPanel(
         resultList,
         ScrollPaneFactory.createScrollPane(resultList),
+        MyBundle.message("dialog.grep.candidates.prompt"),
     )
     private val preview = FuzzyFinderPreview(project)
     private val dialogScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -165,6 +166,10 @@ class LiveGrepDialog(
         fzfSearchTimer.stop()
         val query = searchField.text
         val options = optionsPanel.currentOptions()
+        if (query.isBlank()) {
+            showGrepPrompt()
+            return
+        }
         statusLabel.text = MyBundle.message("dialog.status.searching")
         candidateListPanel.showSearching(resultModel.size > 0)
 
@@ -276,6 +281,16 @@ class LiveGrepDialog(
                 isOKActionEnabled = false
             }
         }
+        updatePreview()
+    }
+
+    private fun showGrepPrompt() {
+        cachedRgMatches = emptyList()
+        visibleMatches = emptyList()
+        resultModel.replaceAll(emptyList())
+        candidateListPanel.showInitialEmptyText()
+        statusLabel.text = MyBundle.message("dialog.grep.status.ready")
+        isOKActionEnabled = false
         updatePreview()
     }
 
