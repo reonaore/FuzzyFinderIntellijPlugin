@@ -93,6 +93,8 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
             installCandidateNavigationShortcuts(searchField)
             installCandidateNavigationShortcuts(searchField.textEditor)
             installCandidateNavigationShortcuts(searchField.textEditor, JComponent.WHEN_FOCUSED)
+            installCandidateNavigationShortcuts(optionsPanel.extensionsFieldComponent(), JComponent.WHEN_FOCUSED)
+            installCandidateNavigationShortcuts(optionsPanel.excludeFieldComponent(), JComponent.WHEN_FOCUSED)
         }
     }
 

@@ -120,6 +120,8 @@ class LiveGrepDialog(
             installCandidateNavigationShortcuts(fzfSearchField)
             installCandidateNavigationShortcuts(fzfSearchField.textEditor)
             installCandidateNavigationShortcuts(fzfSearchField.textEditor, JComponent.WHEN_FOCUSED)
+            installCandidateNavigationShortcuts(optionsPanel.extensionsFieldComponent(), JComponent.WHEN_FOCUSED)
+            installCandidateNavigationShortcuts(optionsPanel.excludeFieldComponent(), JComponent.WHEN_FOCUSED)
         }
     }
 

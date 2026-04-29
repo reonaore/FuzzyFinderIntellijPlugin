@@ -2,7 +2,11 @@ package com.github.reonaore.fuzzyfinderintellijplugin.ui
 
 import junit.framework.TestCase.assertEquals
 import junit.framework.TestCase.assertFalse
+import junit.framework.TestCase.assertSame
 import junit.framework.TestCase.assertTrue
+import java.awt.GridBagLayout
+import java.awt.event.KeyEvent
+import javax.swing.JPanel
 import org.junit.Test
 
 class LiveGrepOptionsPanelTest {
@@ -57,5 +61,30 @@ class LiveGrepOptionsPanelTest {
 
         assertTrue(panel.smartCaseLabelText().contains("<u>c</u>"))
         assertEquals("Alt+C", panel.smartCaseTooltipText())
+    }
+
+    @Test
+    fun filterLabelsFocusTheirFieldsWithAltShortcuts() {
+        val panel = LiveGrepOptionsPanel { }
+
+        assertEquals("<html><u>E</u>xtensions</html>", panel.extensionsLabelText())
+        assertEquals(KeyEvent.VK_E, panel.extensionsLabelMnemonic())
+        assertSame(panel.extensionsFieldComponent(), panel.extensionsLabelTarget())
+        assertEquals("Alt+E", panel.extensionsTooltipText())
+        assertEquals("<html>E<u>x</u>clude</html>", panel.excludeLabelText())
+        assertEquals(KeyEvent.VK_X, panel.excludeLabelMnemonic())
+        assertSame(panel.excludeFieldComponent(), panel.excludeLabelTarget())
+        assertEquals("Alt+X", panel.excludeTooltipText())
+    }
+
+    @Test
+    fun placesFilterFieldsAboveScopeCheckboxes() {
+        val panel = LiveGrepOptionsPanel { }
+        val component = panel.component() as JPanel
+        val layout = component.layout as GridBagLayout
+
+        assertEquals(0, layout.getConstraints(panel.extensionsFieldComponent()).gridy)
+        assertEquals(0, layout.getConstraints(panel.excludeFieldComponent()).gridy)
+        assertEquals(1, layout.getConstraints(panel.includeHiddenComponent()).gridy)
     }
 }

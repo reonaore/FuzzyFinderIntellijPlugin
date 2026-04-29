@@ -3,7 +3,9 @@ package com.github.reonaore.fuzzyfinderintellijplugin.ui
 import com.github.reonaore.fuzzyfinderintellijplugin.services.GrepSearchOptions
 import com.intellij.ui.DocumentAdapter
 import com.intellij.ui.components.JBTextField
-import java.awt.FlowLayout
+import java.awt.GridBagConstraints
+import java.awt.GridBagLayout
+import java.awt.Insets
 import java.awt.event.KeyEvent
 import javax.swing.JCheckBox
 import javax.swing.JComponent
@@ -19,6 +21,16 @@ class LiveGrepOptionsPanel(
     private val smartCaseCheckBox = JCheckBox(FuzzyFinderOptionsPanel.mnemonicLabel("Smart case", 'c'))
     private val extensionsField = JBTextField()
     private val excludeField = JBTextField(DEFAULT_EXCLUDES)
+    private val extensionsLabel = JLabel(FuzzyFinderOptionsPanel.mnemonicLabel("Extensions", 'E')).apply {
+        displayedMnemonic = KeyEvent.VK_E
+        labelFor = extensionsField
+        toolTipText = ALT_E_TOOLTIP
+    }
+    private val excludeLabel = JLabel(FuzzyFinderOptionsPanel.mnemonicLabel("Exclude", 'x')).apply {
+        displayedMnemonic = KeyEvent.VK_X
+        labelFor = excludeField
+        toolTipText = ALT_X_TOOLTIP
+    }
 
     init {
         followSymlinksCheckBox.isSelected = true
@@ -50,17 +62,24 @@ class LiveGrepOptionsPanel(
     }
 
     fun component(): JComponent {
-        return JPanel(FlowLayout(FlowLayout.LEFT, 8, 0)).apply {
-            add(includeHiddenCheckBox)
-            add(followSymlinksCheckBox)
-            add(respectGitIgnoreCheckBox)
-            add(smartCaseCheckBox)
-            add(JLabel("Extensions"))
+        return JPanel(GridBagLayout()).apply {
             extensionsField.columns = 12
-            add(extensionsField)
-            add(JLabel("Exclude"))
             excludeField.columns = 20
-            add(excludeField)
+
+            addOptionComponent(extensionsLabel, gridx = 0, gridy = 0)
+            addOptionComponent(extensionsField, gridx = 1, gridy = 0)
+            addOptionComponent(excludeLabel, gridx = 2, gridy = 0)
+            addOptionComponent(
+                excludeField,
+                gridx = 3,
+                gridy = 0,
+                weightx = 1.0,
+                fill = GridBagConstraints.HORIZONTAL,
+            )
+            addOptionComponent(includeHiddenCheckBox, gridx = 0, gridy = 1, topInset = 4)
+            addOptionComponent(followSymlinksCheckBox, gridx = 1, gridy = 1, topInset = 4)
+            addOptionComponent(respectGitIgnoreCheckBox, gridx = 2, gridy = 1, topInset = 4)
+            addOptionComponent(smartCaseCheckBox, gridx = 3, gridy = 1, weightx = 1.0, topInset = 4)
         }
     }
 
@@ -116,6 +135,8 @@ class LiveGrepOptionsPanel(
 
     internal fun includeHiddenLabelText(): String = includeHiddenCheckBox.text
 
+    internal fun includeHiddenComponent(): JComponent = includeHiddenCheckBox
+
     internal fun followSymlinksLabelText(): String = followSymlinksCheckBox.text
 
     internal fun respectGitIgnoreLabelText(): String = respectGitIgnoreCheckBox.text
@@ -124,11 +145,54 @@ class LiveGrepOptionsPanel(
 
     internal fun smartCaseTooltipText(): String? = smartCaseCheckBox.toolTipText
 
+    internal fun extensionsLabelText(): String = extensionsLabel.text
+
+    internal fun extensionsLabelMnemonic(): Int = extensionsLabel.displayedMnemonic
+
+    internal fun extensionsLabelTarget(): JComponent? = extensionsLabel.labelFor as? JComponent
+
+    internal fun extensionsFieldComponent(): JComponent = extensionsField
+
+    internal fun extensionsTooltipText(): String? = extensionsLabel.toolTipText
+
+    internal fun excludeLabelText(): String = excludeLabel.text
+
+    internal fun excludeLabelMnemonic(): Int = excludeLabel.displayedMnemonic
+
+    internal fun excludeLabelTarget(): JComponent? = excludeLabel.labelFor as? JComponent
+
+    internal fun excludeFieldComponent(): JComponent = excludeField
+
+    internal fun excludeTooltipText(): String? = excludeLabel.toolTipText
+
     private companion object {
         const val DEFAULT_EXCLUDES = ".git"
         const val ALT_H_TOOLTIP = "Alt+H"
         const val ALT_S_TOOLTIP = "Alt+S"
         const val ALT_G_TOOLTIP = "Alt+G"
         const val ALT_C_TOOLTIP = "Alt+C"
+        const val ALT_E_TOOLTIP = "Alt+E"
+        const val ALT_X_TOOLTIP = "Alt+X"
     }
+}
+
+private fun JPanel.addOptionComponent(
+    component: JComponent,
+    gridx: Int,
+    gridy: Int,
+    weightx: Double = 0.0,
+    fill: Int = GridBagConstraints.NONE,
+    topInset: Int = 0,
+) {
+    add(
+        component,
+        GridBagConstraints().apply {
+            this.gridx = gridx
+            this.gridy = gridy
+            this.weightx = weightx
+            this.fill = fill
+            anchor = GridBagConstraints.WEST
+            insets = Insets(topInset, 0, 0, 8)
+        },
+    )
 }
