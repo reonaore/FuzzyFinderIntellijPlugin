@@ -52,6 +52,10 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
             doOKAction()
         }
     }
+    private val candidateListPanel = CandidateListLoadingPanel(
+        resultList,
+        ScrollPaneFactory.createScrollPane(resultList),
+    )
     private val preview = FuzzyFinderPreview(project)
     private val dialogScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var searchJob: Job? = null
@@ -79,7 +83,7 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
 
         val splitter = JBSplitter(false, 0.42f).apply {
             firstComponent = JPanel(BorderLayout()).apply {
-                add(ScrollPaneFactory.createScrollPane(resultList), BorderLayout.CENTER)
+                add(candidateListPanel.component, BorderLayout.CENTER)
             }
             secondComponent = preview.editor.component
         }
@@ -108,6 +112,7 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
     override fun dispose() {
         searchTimer.stop()
         dialogScope.cancel()
+        candidateListPanel.dispose()
         preview.dispose()
         super.dispose()
     }
@@ -123,6 +128,7 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
         val query = searchField.text
         val options = optionsPanel.currentOptions()
         statusLabel.text = MyBundle.message("dialog.status.searching")
+        candidateListPanel.showSearching(resultModel.size > 0)
 
         searchJob = dialogScope.launch(ModalityState.defaultModalityState().asContextElement()) {
             val res = service.search(query, options)
@@ -132,6 +138,7 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
                 if (e is FuzzyFinderException) {
                     dialogScope.launch(Dispatchers.EDT) {
                         statusLabel.text = MyBundle.message("dialog.status.error")
+                        candidateListPanel.showError()
                         service.notifyError(e.message ?: MyBundle.message("dialog.status.error"))
                     }
                 }
@@ -146,6 +153,7 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
         }
         withContext(Dispatchers.EDT) {
             resultModel.replaceAll(items)
+            candidateListPanel.showResults(items.isNotEmpty())
             statusLabel.text = MyBundle.message(
                 "dialog.status.resultsDetailed",
                 paths.size,

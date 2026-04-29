@@ -57,6 +57,10 @@ class LiveGrepDialog(
             doOKAction()
         }
     }
+    private val candidateListPanel = CandidateListLoadingPanel(
+        resultList,
+        ScrollPaneFactory.createScrollPane(resultList),
+    )
     private val preview = FuzzyFinderPreview(project)
     private val dialogScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var rgSearchJob: Job? = null
@@ -103,7 +107,7 @@ class LiveGrepDialog(
 
         val splitter = JBSplitter(false, 0.42f).apply {
             firstComponent = JPanel(BorderLayout()).apply {
-                add(ScrollPaneFactory.createScrollPane(resultList), BorderLayout.CENTER)
+                add(candidateListPanel.component, BorderLayout.CENTER)
             }
             secondComponent = preview.editor.component
         }
@@ -136,6 +140,7 @@ class LiveGrepDialog(
         rgSearchTimer.stop()
         fzfSearchTimer.stop()
         dialogScope.cancel()
+        candidateListPanel.dispose()
         preview.dispose()
         super.dispose()
     }
@@ -161,6 +166,7 @@ class LiveGrepDialog(
         val query = searchField.text
         val options = optionsPanel.currentOptions()
         statusLabel.text = MyBundle.message("dialog.status.searching")
+        candidateListPanel.showSearching(resultModel.size > 0)
 
         rgSearchJob = dialogScope.launch(ModalityState.defaultModalityState().asContextElement()) {
             val res = service.grep(query, options, limit = Int.MAX_VALUE)
@@ -180,6 +186,7 @@ class LiveGrepDialog(
                 if (e is FuzzyFinderException) {
                     dialogScope.launch(Dispatchers.EDT) {
                         statusLabel.text = MyBundle.message("dialog.status.error")
+                        candidateListPanel.showError()
                         service.notifyError(e.message ?: MyBundle.message("dialog.status.error"))
                     }
                 }
@@ -221,6 +228,10 @@ class LiveGrepDialog(
 
     private fun startFzfSearch(query: String, showSearching: Boolean = true) {
         fzfSearchJob?.cancel()
+        if (showSearching) {
+            statusLabel.text = MyBundle.message("dialog.status.searching")
+            candidateListPanel.showSearching(resultModel.size > 0)
+        }
         if (query.isBlank()) {
             fzfSearchJob = dialogScope.launch(ModalityState.defaultModalityState().asContextElement()) {
                 applySearchResult(cachedRgMatches.take(MAX_RESULTS), cachedRgMatches.size)
@@ -228,9 +239,6 @@ class LiveGrepDialog(
             return
         }
 
-        if (showSearching) {
-            statusLabel.text = MyBundle.message("dialog.status.searching")
-        }
         fzfSearchJob = dialogScope.launch(ModalityState.defaultModalityState().asContextElement()) {
             applyFilteredSearchResult(query)
         }.also {
@@ -238,6 +246,7 @@ class LiveGrepDialog(
                 if (e is FuzzyFinderException) {
                     dialogScope.launch(Dispatchers.EDT) {
                         statusLabel.text = MyBundle.message("dialog.status.error")
+                        candidateListPanel.showError()
                         service.notifyError(e.message ?: MyBundle.message("dialog.status.error"))
                     }
                 }
@@ -255,6 +264,7 @@ class LiveGrepDialog(
         withContext(Dispatchers.EDT) {
             visibleMatches = matches
             resultModel.replaceAll(items)
+            candidateListPanel.showResults(matches.isNotEmpty())
             statusLabel.text = MyBundle.message(
                 "dialog.grep.status.resultsDetailed",
                 matches.size,
