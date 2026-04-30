@@ -15,7 +15,7 @@ class FuzzyFinderOptionsPanelTest {
     @Test
     fun togglingIncludeHiddenUpdatesSearchOptionsAndNotifiesListener() {
         var changes = 0
-        val panel = FuzzyFinderOptionsPanel().apply { onOptionsChanged { changes++ } }
+        val panel = FuzzyFinderOptionsPanel().apply { setOnOptionsChanged { changes++ } }
 
         assertFalse(panel.currentOptions().includeHidden)
 
@@ -28,7 +28,7 @@ class FuzzyFinderOptionsPanelTest {
     @Test
     fun togglingFollowSymlinksUpdatesSearchOptionsAndNotifiesListener() {
         var changes = 0
-        val panel = FuzzyFinderOptionsPanel().apply { onOptionsChanged { changes++ } }
+        val panel = FuzzyFinderOptionsPanel().apply { setOnOptionsChanged { changes++ } }
 
         assertTrue(panel.currentOptions().followSymlinks)
 
@@ -41,7 +41,7 @@ class FuzzyFinderOptionsPanelTest {
     @Test
     fun togglingRespectGitIgnoreUpdatesSearchOptionsAndNotifiesListener() {
         var changes = 0
-        val panel = FuzzyFinderOptionsPanel().apply { onOptionsChanged { changes++ } }
+        val panel = FuzzyFinderOptionsPanel().apply { setOnOptionsChanged { changes++ } }
 
         assertTrue(panel.currentOptions().respectGitIgnore)
 
@@ -63,7 +63,7 @@ class FuzzyFinderOptionsPanelTest {
     @Test
     fun notifiesWhenExtensionFiltersChange() {
         var changes = 0
-        val panel = FuzzyFinderOptionsPanel().apply { onOptionsChanged { changes++ } }
+        val panel = FuzzyFinderOptionsPanel().apply { setOnOptionsChanged { changes++ } }
 
         panel.setExtensionsText("kt")
 
@@ -83,7 +83,7 @@ class FuzzyFinderOptionsPanelTest {
     @Test
     fun notifiesWhenExcludeFiltersChange() {
         var changes = 0
-        val panel = FuzzyFinderOptionsPanel().apply { onOptionsChanged { changes++ } }
+        val panel = FuzzyFinderOptionsPanel().apply { setOnOptionsChanged { changes++ } }
 
         panel.setExcludeText("build")
 

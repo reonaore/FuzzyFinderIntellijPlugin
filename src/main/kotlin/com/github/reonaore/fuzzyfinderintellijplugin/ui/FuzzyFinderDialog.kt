@@ -119,7 +119,7 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
         searchField.onTextChanged {
             viewModel.onQueryChanged(searchField.text)
         }
-        optionsPanel.onOptionsChanged {
+        optionsPanel.setOnOptionsChanged {
             viewModel.onOptionsChanged(optionsPanel.currentOptions())
         }
         bindViewModel()

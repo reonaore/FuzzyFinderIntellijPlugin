@@ -6,6 +6,7 @@ import com.github.reonaore.fuzzyfinderintellijplugin.services.FuzzyFinderExcepti
 import com.github.reonaore.fuzzyfinderintellijplugin.services.FuzzyFinderService
 import com.github.reonaore.fuzzyfinderintellijplugin.services.SearchResult
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -25,6 +26,7 @@ data class FuzzyFinderDialogState(
     val statusText: String = MyBundle.message("dialog.status.loading"),
 )
 
+@OptIn(FlowPreview::class)
 class FuzzyFinderDialogViewModel(
     private val service: FuzzyFinderService,
     private val scope: CoroutineScope,
