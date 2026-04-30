@@ -77,23 +77,30 @@ class LiveGrepDialog(
     private val fzfSearchTimer = Timer(SEARCH_DEBOUNCE_MS) { triggerFzfSearch() }.apply {
         isRepeats = false
     }
-    private val searchField = fuzzyFinderSearchTextField(placeHolderText = MyBundle.message("dialog.grep.search.placeholder")) {
-        if (!suppressRgSearchEvents) {
-            handleRgQueryChanged()
-        }
-    }
-    private val fzfSearchField = fuzzyFinderSearchTextField(placeHolderText = MyBundle.message("dialog.grep.fuzzy.placeholder")) {
-        if (!suppressFzfSearchEvents) {
-            fzfSearchTimer.restart()
-        }
-    }
+    private val searchField = fuzzyFinderSearchTextField(placeHolderText = MyBundle.message("dialog.grep.search.placeholder"))
+    private val fzfSearchField = fuzzyFinderSearchTextField(placeHolderText = MyBundle.message("dialog.grep.fuzzy.placeholder"))
 
     init {
         title = MyBundle.message("dialog.grep.title")
         setOKButtonText(MyBundle.message("dialog.open"))
         isOKActionEnabled = false
         init()
+        bindSearchFields()
         applyInitialQuery()
+    }
+
+
+    private fun bindSearchFields() {
+        searchField.onTextChanged {
+            if (!suppressRgSearchEvents) {
+                handleRgQueryChanged()
+            }
+        }
+        fzfSearchField.onTextChanged {
+            if (!suppressFzfSearchEvents) {
+                fzfSearchTimer.restart()
+            }
+        }
     }
 
     override fun createCenterPanel(): JComponent {
