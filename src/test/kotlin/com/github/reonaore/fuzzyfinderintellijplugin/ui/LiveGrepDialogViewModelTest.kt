@@ -100,6 +100,56 @@ class LiveGrepDialogViewModelTest {
     }
 
     @Test
+    fun doesNotCancelRunningGrepWhenFzfQueryChanges() = runBlocking {
+        val sourceMatches = listOf(
+            grepMatch("/tmp/App.kt", "needle"),
+            grepMatch("/tmp/Other.kt", "other"),
+        )
+        val grepResult = CompletableDeferred<GrepSearchResult>()
+        val grepFinished = CompletableDeferred<Unit>()
+        val viewModel = LiveGrepDialogViewModel(
+            scope = CoroutineScope(Job() + Dispatchers.Default),
+            initialOptions = GrepSearchOptions(),
+            runGrep = { query, _ ->
+                try {
+                    grepResult.await()
+                } finally {
+                    grepFinished.complete(Unit)
+                }
+            },
+            filterMatches = { query, matches ->
+                matches.filter { it.lineText.contains(query) }
+            },
+            notifyError = {},
+        )
+
+        viewModel.onRgQueryChanged("needle")
+        withTimeout(TEST_TIMEOUT_MS) {
+            waitUntil { viewModel.state.value.rgQuery == "needle" && viewModel.state.value.isSearching }
+        }
+
+        viewModel.onFzfQueryChanged("other")
+        delay(SEARCH_DEBOUNCE_WAIT_MS)
+
+        assertFalse(grepFinished.isCompleted)
+
+        grepResult.complete(
+            GrepSearchResult(
+                totalMatches = sourceMatches.size,
+                query = "needle",
+                matches = sourceMatches,
+            ),
+        )
+
+        withTimeout(TEST_TIMEOUT_MS) {
+            waitUntil {
+                viewModel.state.value.fzfQuery == "other" &&
+                    viewModel.state.value.matches == listOf(sourceMatches[1])
+            }
+        }
+    }
+
+    @Test
     fun marksStateAsErrorWhenGrepFails() = runBlocking {
         val notifications = mutableListOf<String>()
         val viewModel = LiveGrepDialogViewModel(
@@ -140,5 +190,6 @@ class LiveGrepDialogViewModelTest {
 
     private companion object {
         const val TEST_TIMEOUT_MS = 2_000L
+        const val SEARCH_DEBOUNCE_WAIT_MS = 250L
     }
 }

@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
 data class LiveGrepDialogState(
@@ -60,28 +61,42 @@ class LiveGrepDialogViewModel internal constructor(
 
     private var cachedRgMatches: List<GrepMatch> = emptyList()
     private var cachedRgTotalMatches: Int = 0
+    private var cachedRgQuery: String? = null
+    private var cachedRgOptions: GrepSearchOptions? = null
+    private var isGrepSearching = false
 
     init {
         scope.launch {
-            var previousRgQuery: String? = null
-            var previousOptions: GrepSearchOptions? = null
-
             combine(
                 rgQuery.debounce(SEARCH_DEBOUNCE_MS),
-                fzfQuery.debounce(SEARCH_DEBOUNCE_MS),
                 options,
-            ) { latestRgQuery, latestFzfQuery, latestOptions ->
-                LiveGrepSearchRequest(latestRgQuery, latestFzfQuery, latestOptions)
-            }.collectLatest { request ->
-                val shouldRunGrep = request.rgQuery != previousRgQuery || request.options != previousOptions
-                if (shouldRunGrep) {
-                    previousRgQuery = request.rgQuery
-                    previousOptions = request.options
-                    searchWithGrep(request)
-                } else {
-                    searchWithFzf(request)
-                }
+            ) { latestRgQuery, latestOptions ->
+                latestRgQuery to latestOptions
             }
+                .distinctUntilChanged()
+                .collectLatest { (latestRgQuery, latestOptions) ->
+                    searchWithGrep(
+                        LiveGrepSearchRequest(
+                            rgQuery = latestRgQuery,
+                            fzfQuery = fzfQuery.value,
+                            options = latestOptions,
+                        ),
+                    )
+                }
+        }
+        scope.launch {
+            fzfQuery
+                .debounce(SEARCH_DEBOUNCE_MS)
+                .distinctUntilChanged()
+                .collectLatest { latestFzfQuery ->
+                    searchWithFzf(
+                        LiveGrepSearchRequest(
+                            rgQuery = rgQuery.value,
+                            fzfQuery = latestFzfQuery,
+                            options = options.value,
+                        ),
+                    )
+                }
         }
     }
 
@@ -111,14 +126,20 @@ class LiveGrepDialogViewModel internal constructor(
 
         showSearching(request)
         try {
+            isGrepSearching = true
             val result = runGrep(request.rgQuery, request.options)
             cachedRgMatches = result.matches
             cachedRgTotalMatches = result.totalMatches
-            applyFilteredResult(request, filteredMatches(request.fzfQuery))
+            cachedRgQuery = request.rgQuery
+            cachedRgOptions = request.options
+            val latestRequest = request.copy(fzfQuery = fzfQuery.value)
+            applyFilteredResult(latestRequest, filteredMatches(latestRequest.fzfQuery))
         } catch (e: CancellationException) {
             throw e
         } catch (e: Throwable) {
             applyError(request, e)
+        } finally {
+            isGrepSearching = false
         }
     }
 
@@ -132,6 +153,22 @@ class LiveGrepDialogViewModel internal constructor(
             return
         }
 
+        if (!hasFreshGrepCache(request)) {
+            _state.value = _state.value.copy(
+                rgQuery = request.rgQuery,
+                fzfQuery = request.fzfQuery,
+                options = request.options,
+                isSearching = isGrepSearching,
+                hasError = false,
+                statusText = if (isGrepSearching) {
+                    MyBundle.message("dialog.status.searching")
+                } else {
+                    _state.value.statusText
+                },
+            )
+            return
+        }
+
         showSearching(request)
         try {
             applyFilteredResult(request, filteredMatches(request.fzfQuery))
@@ -140,6 +177,10 @@ class LiveGrepDialogViewModel internal constructor(
         } catch (e: Throwable) {
             applyError(request, e)
         }
+    }
+
+    private fun hasFreshGrepCache(request: LiveGrepSearchRequest): Boolean {
+        return request.rgQuery == cachedRgQuery && request.options == cachedRgOptions
     }
 
     private suspend fun filteredMatches(query: String): List<GrepMatch> {
