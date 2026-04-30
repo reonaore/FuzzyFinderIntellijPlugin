@@ -140,6 +140,8 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
                     resultModel.replaceAll(items)
                     if (state.isSearching) {
                         candidateListPanel.showSearching(state.hasSearched)
+                    } else if (state.hasError) {
+                        candidateListPanel.showError()
                     } else {
                         candidateListPanel.showResults(items.isNotEmpty())
                     }

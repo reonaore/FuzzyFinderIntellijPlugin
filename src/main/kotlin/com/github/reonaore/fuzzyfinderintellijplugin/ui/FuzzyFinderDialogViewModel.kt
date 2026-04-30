@@ -5,12 +5,14 @@ import com.github.reonaore.fuzzyfinderintellijplugin.services.FdSearchOptions
 import com.github.reonaore.fuzzyfinderintellijplugin.services.FuzzyFinderException
 import com.github.reonaore.fuzzyfinderintellijplugin.services.FuzzyFinderService
 import com.github.reonaore.fuzzyfinderintellijplugin.services.SearchResult
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
@@ -20,6 +22,7 @@ data class FuzzyFinderDialogState(
     val query: String = "",
     val options: FdSearchOptions,
     val isSearching: Boolean = false,
+    val hasError: Boolean = false,
     val hasSearched: Boolean = false,
     val paths: List<Path> = emptyList(),
     val totalCandidates: Int = 0,
@@ -27,11 +30,23 @@ data class FuzzyFinderDialogState(
 )
 
 @OptIn(FlowPreview::class)
-class FuzzyFinderDialogViewModel(
-    private val service: FuzzyFinderService,
-    private val scope: CoroutineScope,
+class FuzzyFinderDialogViewModel internal constructor(
+    scope: CoroutineScope,
     initialOptions: FdSearchOptions,
+    private val runSearch: suspend (String, FdSearchOptions) -> SearchResult,
+    private val notifyError: (String) -> Unit,
 ) {
+    constructor(
+        service: FuzzyFinderService,
+        scope: CoroutineScope,
+        initialOptions: FdSearchOptions,
+    ) : this(
+        scope = scope,
+        initialOptions = initialOptions,
+        runSearch = service::search,
+        notifyError = service::notifyError,
+    )
+
     private val query = MutableStateFlow("")
     private val options = MutableStateFlow(initialOptions)
 
@@ -47,7 +62,7 @@ class FuzzyFinderDialogViewModel(
                 options,
             ) { latestQuery, latestOptions -> latestQuery to latestOptions }
                 .distinctUntilChanged()
-                .collect { (latestQuery, latestOptions) ->
+                .collectLatest { (latestQuery, latestOptions) ->
                     search(latestQuery, latestOptions)
                 }
         }
@@ -66,25 +81,29 @@ class FuzzyFinderDialogViewModel(
             query = query,
             options = options,
             isSearching = true,
+            hasError = false,
             statusText = MyBundle.message("dialog.status.searching"),
         )
 
-        runCatching { service.search(query, options) }
-            .onSuccess { applySearchResult(query, options, it) }
-            .onFailure { throwable ->
-                _state.value = _state.value.copy(
-                    query = query,
-                    options = options,
-                    isSearching = false,
-                    hasSearched = true,
-                    statusText = MyBundle.message("dialog.status.error"),
-                )
-                val message = when (throwable) {
-                    is FuzzyFinderException -> throwable.message
-                    else -> throwable.localizedMessage
-                } ?: MyBundle.message("dialog.status.error")
-                service.notifyError(message)
-            }
+        try {
+            applySearchResult(query, options, runSearch(query, options))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            _state.value = _state.value.copy(
+                query = query,
+                options = options,
+                isSearching = false,
+                hasError = true,
+                hasSearched = true,
+                statusText = MyBundle.message("dialog.status.error"),
+            )
+            val message = when (e) {
+                is FuzzyFinderException -> e.message
+                else -> e.localizedMessage
+            } ?: MyBundle.message("dialog.status.error")
+            notifyError(message)
+        }
     }
 
     private fun applySearchResult(query: String, options: FdSearchOptions, searchResult: SearchResult) {
@@ -92,6 +111,7 @@ class FuzzyFinderDialogViewModel(
             query = query,
             options = options,
             isSearching = false,
+            hasError = false,
             hasSearched = true,
             paths = searchResult.results,
             totalCandidates = searchResult.totalCandidates,
