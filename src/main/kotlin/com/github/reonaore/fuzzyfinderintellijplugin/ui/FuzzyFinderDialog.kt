@@ -131,7 +131,7 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
     }
 
     private fun bindViewModel() {
-        dialogScope.launch(ModalityState.defaultModalityState().asContextElement()) {
+        dialogScope.launch(dialogModalityContext()) {
             viewModel.state.collectLatest { state ->
                 val items = state.paths.map { path ->
                     path.toFileListItem(project.basePath, state.query)
@@ -157,7 +157,7 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
 
     private fun updatePreview(@Suppress("UNUSED_PARAMETER") event: ListSelectionEvent? = null) {
         previewJob?.cancel()
-        previewJob = dialogScope.launch(ModalityState.defaultModalityState().asContextElement()) {
+        previewJob = dialogScope.launch(dialogModalityContext()) {
             val selected = withContext(Dispatchers.EDT) {
                 resultList.selectedValue?.path
             } ?: run {
@@ -174,6 +174,8 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
             preview.show(previewContent)
         }
     }
+
+    private fun dialogModalityContext() = ModalityState.stateForComponent(rootPane).asContextElement()
 
     private fun selectedVirtualFile(): VirtualFile? {
         val selected = resultList.selectedValue?.path ?: return null
