@@ -12,9 +12,8 @@ import javax.swing.JComponent
 import javax.swing.JLabel
 import javax.swing.JPanel
 
-class LiveGrepOptionsPanel(
-    private val onOptionsChanged: () -> Unit,
-) {
+class LiveGrepOptionsPanel {
+    private var onOptionsChangedCallback: () -> Unit = {}
     private val includeHiddenCheckBox = JCheckBox(FuzzyFinderOptionsPanel.mnemonicLabel("Hidden", 'H'))
     private val followSymlinksCheckBox = JCheckBox(FuzzyFinderOptionsPanel.mnemonicLabel("Follow symlinks", 's'))
     private val respectGitIgnoreCheckBox = JCheckBox(FuzzyFinderOptionsPanel.mnemonicLabel(".gitignore", 'g'))
@@ -45,20 +44,24 @@ class LiveGrepOptionsPanel(
         respectGitIgnoreCheckBox.toolTipText = ALT_G_TOOLTIP
         smartCaseCheckBox.toolTipText = ALT_C_TOOLTIP
 
-        includeHiddenCheckBox.addActionListener { onOptionsChanged() }
-        followSymlinksCheckBox.addActionListener { onOptionsChanged() }
-        respectGitIgnoreCheckBox.addActionListener { onOptionsChanged() }
-        smartCaseCheckBox.addActionListener { onOptionsChanged() }
+        includeHiddenCheckBox.addActionListener { onOptionsChangedCallback() }
+        followSymlinksCheckBox.addActionListener { onOptionsChangedCallback() }
+        respectGitIgnoreCheckBox.addActionListener { onOptionsChangedCallback() }
+        smartCaseCheckBox.addActionListener { onOptionsChangedCallback() }
         extensionsField.document.addDocumentListener(object : DocumentAdapter() {
             override fun textChanged(e: javax.swing.event.DocumentEvent) {
-                onOptionsChanged()
+                onOptionsChangedCallback()
             }
         })
         excludeField.document.addDocumentListener(object : DocumentAdapter() {
             override fun textChanged(e: javax.swing.event.DocumentEvent) {
-                onOptionsChanged()
+                onOptionsChangedCallback()
             }
         })
+    }
+
+    fun setOnOptionsChanged(onOptionsChanged: () -> Unit) {
+        this.onOptionsChangedCallback = onOptionsChanged
     }
 
     fun component(): JComponent {

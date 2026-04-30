@@ -13,7 +13,7 @@ class LiveGrepOptionsPanelTest {
 
     @Test
     fun defaultsToSmartCaseAndProjectFriendlyScopeOptions() {
-        val panel = LiveGrepOptionsPanel { }
+        val panel = LiveGrepOptionsPanel()
         val options = panel.currentOptions()
 
         assertFalse(options.includeHidden)
@@ -26,7 +26,7 @@ class LiveGrepOptionsPanelTest {
 
     @Test
     fun parsesCommaSeparatedExtensionFilters() {
-        val panel = LiveGrepOptionsPanel { }
+        val panel = LiveGrepOptionsPanel()
 
         panel.setExtensionsText(" kt, .java,  ,md ")
 
@@ -36,7 +36,8 @@ class LiveGrepOptionsPanelTest {
     @Test
     fun notifiesWhenExtensionFiltersChange() {
         var changes = 0
-        val panel = LiveGrepOptionsPanel { changes++ }
+        val panel = LiveGrepOptionsPanel()
+        panel.setOnOptionsChanged { changes++ }
 
         panel.setExtensionsText("kt")
 
@@ -47,7 +48,8 @@ class LiveGrepOptionsPanelTest {
     @Test
     fun togglesSmartCaseAndNotifiesChanges() {
         var changes = 0
-        val panel = LiveGrepOptionsPanel { changes++ }
+        val panel = LiveGrepOptionsPanel()
+        panel.setOnOptionsChanged { changes++ }
 
         panel.toggleSmartCase()
 
@@ -57,7 +59,7 @@ class LiveGrepOptionsPanelTest {
 
     @Test
     fun exposesMnemonicLabelAndTooltipText() {
-        val panel = LiveGrepOptionsPanel { }
+        val panel = LiveGrepOptionsPanel()
 
         assertTrue(panel.smartCaseLabelText().contains("<u>c</u>"))
         assertEquals("Alt+C", panel.smartCaseTooltipText())
@@ -65,7 +67,7 @@ class LiveGrepOptionsPanelTest {
 
     @Test
     fun filterLabelsUnderlineTheShortcutCharacter() {
-        val panel = LiveGrepOptionsPanel { }
+        val panel = LiveGrepOptionsPanel()
 
         assertEquals("<html><u>E</u>xtensions</html>", panel.extensionsLabelText())
         assertEquals("<html>E<u>x</u>clude</html>", panel.excludeLabelText())
@@ -73,7 +75,7 @@ class LiveGrepOptionsPanelTest {
 
     @Test
     fun filterLabelsFocusTheirFieldsWithAltShortcuts() {
-        val panel = LiveGrepOptionsPanel { }
+        val panel = LiveGrepOptionsPanel()
 
         assertEquals(KeyEvent.VK_E, panel.extensionsLabelMnemonic())
         assertSame(panel.extensionsFieldComponent(), panel.extensionsLabelTarget())
@@ -85,7 +87,7 @@ class LiveGrepOptionsPanelTest {
 
     @Test
     fun placesFilterFieldsAboveScopeCheckboxes() {
-        val panel = LiveGrepOptionsPanel { }
+        val panel = LiveGrepOptionsPanel()
         val component = panel.component() as JPanel
         val layout = component.layout as GridBagLayout
 

@@ -1,7 +1,6 @@
 package com.github.reonaore.fuzzyfinderintellijplugin.ui
 
 import com.github.reonaore.fuzzyfinderintellijplugin.MyBundle
-import com.github.reonaore.fuzzyfinderintellijplugin.services.FuzzyFinderException
 import com.github.reonaore.fuzzyfinderintellijplugin.services.FuzzyFinderService
 import com.github.reonaore.fuzzyfinderintellijplugin.services.GrepMatch
 import com.github.reonaore.fuzzyfinderintellijplugin.services.PreviewHighlightRange
@@ -23,6 +22,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.awt.BorderLayout
@@ -35,8 +35,6 @@ import javax.swing.Action
 import javax.swing.JComponent
 import javax.swing.JPanel
 import javax.swing.KeyStroke
-import javax.swing.SwingUtilities
-import javax.swing.Timer
 import javax.swing.event.ListSelectionEvent
 
 class LiveGrepDialog(
@@ -45,7 +43,7 @@ class LiveGrepDialog(
 ) : DialogWrapper(project, false) {
 
     private val service = project.service<FuzzyFinderService>()
-    private val optionsPanel = LiveGrepOptionsPanel { handleRgQueryChanged() }
+    private val optionsPanel = LiveGrepOptionsPanel()
     private val previewLoader = FuzzyFinderPreviewLoader()
     private val statusLabel = JBLabel(MyBundle.message("dialog.grep.status.ready"))
     private val resultModel = CollectionListModel<GrepListItem>()
@@ -64,43 +62,41 @@ class LiveGrepDialog(
     )
     private val preview = FuzzyFinderPreview(project)
     private val dialogScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    private var rgSearchJob: Job? = null
-    private var fzfSearchJob: Job? = null
     private var previewJob: Job? = null
-    private var cachedRgMatches: List<GrepMatch> = emptyList()
     private var visibleMatches: List<GrepMatch> = emptyList()
     private var suppressRgSearchEvents = false
     private var suppressFzfSearchEvents = false
-    private val rgSearchTimer = Timer(SEARCH_DEBOUNCE_MS) { triggerRgSearch() }.apply {
-        isRepeats = false
-    }
-    private val fzfSearchTimer = Timer(SEARCH_DEBOUNCE_MS) { triggerFzfSearch() }.apply {
-        isRepeats = false
-    }
     private val searchField = fuzzyFinderSearchTextField(placeHolderText = MyBundle.message("dialog.grep.search.placeholder"))
     private val fzfSearchField = fuzzyFinderSearchTextField(placeHolderText = MyBundle.message("dialog.grep.fuzzy.placeholder"))
+    private val viewModel = LiveGrepDialogViewModel(service, dialogScope, optionsPanel.currentOptions())
 
     init {
         title = MyBundle.message("dialog.grep.title")
         setOKButtonText(MyBundle.message("dialog.open"))
         isOKActionEnabled = false
         init()
-        bindSearchFields()
+        bind()
         applyInitialQuery()
     }
 
 
-    private fun bindSearchFields() {
+    private fun bind() {
         searchField.onTextChanged {
             if (!suppressRgSearchEvents) {
-                handleRgQueryChanged()
+                clearFzfQuery()
+                viewModel.onRgQueryChanged(searchField.text)
             }
         }
         fzfSearchField.onTextChanged {
             if (!suppressFzfSearchEvents) {
-                fzfSearchTimer.restart()
+                viewModel.onFzfQueryChanged(fzfSearchField.text)
             }
         }
+        optionsPanel.setOnOptionsChanged {
+            clearFzfQuery()
+            viewModel.onOptionsChanged(optionsPanel.currentOptions())
+        }
+        bindViewModel()
     }
 
     override fun createCenterPanel(): JComponent {
@@ -145,8 +141,6 @@ class LiveGrepDialog(
     override fun createActions(): Array<Action> = arrayOf(okAction, cancelAction)
 
     override fun dispose() {
-        rgSearchTimer.stop()
-        fzfSearchTimer.stop()
         dialogScope.cancel()
         candidateListPanel.dispose()
         preview.dispose()
@@ -162,50 +156,6 @@ class LiveGrepDialog(
         super.doOKAction()
     }
 
-    private fun handleRgQueryChanged() {
-        clearFzfQuery()
-        rgSearchTimer.restart()
-    }
-
-    private fun triggerRgSearch() {
-        rgSearchJob?.cancel()
-        fzfSearchJob?.cancel()
-        fzfSearchTimer.stop()
-        val query = searchField.text
-        val options = optionsPanel.currentOptions()
-        if (query.isBlank()) {
-            showGrepPrompt()
-            return
-        }
-        statusLabel.text = MyBundle.message("dialog.status.searching")
-        candidateListPanel.showSearching(resultModel.size > 0)
-
-        rgSearchJob = dialogScope.launch(ModalityState.defaultModalityState().asContextElement()) {
-            val res = service.grep(query, options, limit = Int.MAX_VALUE)
-            cachedRgMatches = res.matches
-            val fzfQuery = withContext(Dispatchers.EDT) {
-                fzfSearchField.text
-            }
-            if (fzfQuery.isBlank()) {
-                applySearchResult(res.matches.take(MAX_RESULTS), res.totalMatches)
-            } else {
-                withContext(Dispatchers.EDT) {
-                    startFzfSearch(fzfQuery, showSearching = false)
-                }
-            }
-        }.also {
-            it.invokeOnCompletion { e ->
-                if (e is FuzzyFinderException) {
-                    dialogScope.launch(Dispatchers.EDT) {
-                        statusLabel.text = MyBundle.message("dialog.status.error")
-                        candidateListPanel.showError()
-                        service.notifyError(e.message ?: MyBundle.message("dialog.status.error"))
-                    }
-                }
-            }
-        }
-    }
-
     private fun applyInitialQuery() {
         if (initialQuery.isBlank()) return
 
@@ -216,11 +166,7 @@ class LiveGrepDialog(
         } finally {
             suppressRgSearchEvents = false
         }
-        SwingUtilities.invokeLater {
-            if (!isDisposed) {
-                rgSearchTimer.restart()
-            }
-        }
+        viewModel.onRgQueryChanged(initialQuery)
     }
 
     private fun clearFzfQuery() {
@@ -232,73 +178,36 @@ class LiveGrepDialog(
         } finally {
             suppressFzfSearchEvents = false
         }
+        viewModel.onFzfQueryChanged("")
     }
 
-    private fun triggerFzfSearch() {
-        startFzfSearch(fzfSearchField.text)
-    }
-
-    private fun startFzfSearch(query: String, showSearching: Boolean = true) {
-        fzfSearchJob?.cancel()
-        if (showSearching) {
-            statusLabel.text = MyBundle.message("dialog.status.searching")
-            candidateListPanel.showSearching(resultModel.size > 0)
-        }
-        if (query.isBlank()) {
-            fzfSearchJob = dialogScope.launch(ModalityState.defaultModalityState().asContextElement()) {
-                applySearchResult(cachedRgMatches.take(MAX_RESULTS), cachedRgMatches.size)
-            }
-            return
-        }
-
-        fzfSearchJob = dialogScope.launch(ModalityState.defaultModalityState().asContextElement()) {
-            applyFilteredSearchResult(query)
-        }.also {
-            it.invokeOnCompletion { e ->
-                if (e is FuzzyFinderException) {
-                    dialogScope.launch(Dispatchers.EDT) {
-                        statusLabel.text = MyBundle.message("dialog.status.error")
+    private fun bindViewModel() {
+        dialogScope.launch(dialogModalityContext()) {
+            viewModel.state.collectLatest { state ->
+                val items = state.matches.toGroupedGrepListItems(project.basePath)
+                withContext(Dispatchers.EDT) {
+                    visibleMatches = state.matches
+                    resultModel.replaceAll(items)
+                    if (state.isSearching) {
+                        candidateListPanel.showSearching(state.hasSearched)
+                    } else if (state.hasError) {
                         candidateListPanel.showError()
-                        service.notifyError(e.message ?: MyBundle.message("dialog.status.error"))
+                    } else if (state.hasSearched) {
+                        candidateListPanel.showResults(items.isNotEmpty())
+                    } else {
+                        candidateListPanel.showInitialEmptyText()
+                    }
+                    statusLabel.text = state.statusText
+                    val firstMatchIndex = firstMatchIndex(items)
+                    if (firstMatchIndex >= 0) {
+                        resultList.selectedIndex = firstMatchIndex
+                    } else {
+                        isOKActionEnabled = false
                     }
                 }
+                updatePreview()
             }
         }
-    }
-
-    private suspend fun applyFilteredSearchResult(query: String) {
-        val matches = service.filterGrepMatches(query, cachedRgMatches)
-        applySearchResult(matches, cachedRgMatches.size)
-    }
-
-    private suspend fun applySearchResult(matches: List<GrepMatch>, totalMatches: Int) {
-        val items = matches.toGroupedGrepListItems(project.basePath)
-        withContext(Dispatchers.EDT) {
-            visibleMatches = matches
-            resultModel.replaceAll(items)
-            candidateListPanel.showResults(matches.isNotEmpty())
-            statusLabel.text = MyBundle.message(
-                "dialog.grep.status.resultsDetailed",
-                matches.size,
-                totalMatches,
-            )
-            if (matches.isNotEmpty()) {
-                resultList.selectedIndex = firstMatchIndex(items)
-            } else {
-                isOKActionEnabled = false
-            }
-        }
-        updatePreview()
-    }
-
-    private fun showGrepPrompt() {
-        cachedRgMatches = emptyList()
-        visibleMatches = emptyList()
-        resultModel.replaceAll(emptyList())
-        candidateListPanel.showInitialEmptyText()
-        statusLabel.text = MyBundle.message("dialog.grep.status.ready")
-        isOKActionEnabled = false
-        updatePreview()
     }
 
     private fun updatePreview(@Suppress("UNUSED_PARAMETER") event: ListSelectionEvent? = null) {
@@ -336,6 +245,8 @@ class LiveGrepDialog(
             }
             .toList()
     }
+
+    private fun dialogModalityContext() = ModalityState.stateForComponent(rootPane).asContextElement()
 
     private fun installCandidateNavigationShortcuts(
         component: JComponent,
@@ -425,8 +336,6 @@ class LiveGrepDialog(
         const val ACTION_TOGGLE_FOLLOW_SYMLINKS = "liveGrep.toggleFollowSymlinks"
         const val ACTION_TOGGLE_RESPECT_GITIGNORE = "liveGrep.toggleRespectGitIgnore"
         const val ACTION_TOGGLE_SMART_CASE = "liveGrep.toggleSmartCase"
-        const val SEARCH_DEBOUNCE_MS = 180
-        const val MAX_RESULTS = 200
         val MENU_SHORTCUT_KEY_MASK = if (SystemInfo.isMac) KeyEvent.META_DOWN_MASK else KeyEvent.CTRL_DOWN_MASK
     }
 }
