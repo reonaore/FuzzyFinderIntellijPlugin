@@ -1,7 +1,6 @@
 package com.github.reonaore.fuzzyfinderintellijplugin.filefinder
 
 import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.HighlightedTextComponent
-import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.contiguousHighlightRanges
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.ui.CollectionListModel
@@ -38,20 +37,6 @@ fun Path.relativePathFrom(basePath: String?): String {
     return Path.of(basePath)
         .relativize(this)
         .toString()
-}
-
-fun toFileListItem(path: Path, basePath: String?, query: String): FileListItem {
-    val relativePath = path.relativePathFrom(basePath)
-    val fileName = path.fileName?.toString().orEmpty().ifBlank { relativePath }
-    val secondaryPath = path.relativeParentPath(basePath)
-
-    return FileListItem(
-        path = path,
-        fileName = fileName,
-        secondaryPath = secondaryPath,
-        highlightRanges = contiguousHighlightRanges(fuzzyMatchIndexes(fileName, query).toSet()),
-        icon = path.fileIcon(),
-    )
 }
 
 internal fun Path.relativeParentPath(basePath: String?): String? {

@@ -11,8 +11,7 @@ class LiveGrepMatchListTest {
     @Test
     fun preservesMatchRangesForLineHighlighting() {
         val ranges = listOf(TextRange(4, 10), TextRange(15, 21))
-        val item = toGroupedGrepListItems(
-            listOf(
+        val item = listOf(
             GrepMatch(
                 path = Path.of("/repo/src/App.kt"),
                 line = 12,
@@ -20,9 +19,7 @@ class LiveGrepMatchListTest {
                 lineText = "fun needle and needle",
                 matchRanges = ranges,
             ),
-            ),
-            "/repo",
-        )
+        ).toGroupedGrepListItems("/repo")
             .filterIsInstance<GrepMatchItem>()
             .single()
 
@@ -35,32 +32,29 @@ class LiveGrepMatchListTest {
 
     @Test
     fun groupsMatchesByFileWithFileHeaders() {
-        val items = toGroupedGrepListItems(
-            listOf(
-                GrepMatch(
-                    path = Path.of("/repo/src/App.kt"),
-                    line = 12,
-                    column = 5,
-                    lineText = "fun needle",
-                    matchRanges = listOf(TextRange(4, 10)),
-                ),
-                GrepMatch(
-                    path = Path.of("/repo/src/App.kt"),
-                    line = 24,
-                    column = 1,
-                    lineText = "needle()",
-                    matchRanges = listOf(TextRange(0, 6)),
-                ),
-                GrepMatch(
-                    path = Path.of("/repo/test/AppTest.kt"),
-                    line = 7,
-                    column = 12,
-                    lineText = "assertNeedle()",
-                    matchRanges = listOf(TextRange(6, 12)),
-                ),
+        val items = listOf(
+            GrepMatch(
+                path = Path.of("/repo/src/App.kt"),
+                line = 12,
+                column = 5,
+                lineText = "fun needle",
+                matchRanges = listOf(TextRange(4, 10)),
             ),
-            "/repo",
-        )
+            GrepMatch(
+                path = Path.of("/repo/src/App.kt"),
+                line = 24,
+                column = 1,
+                lineText = "needle()",
+                matchRanges = listOf(TextRange(0, 6)),
+            ),
+            GrepMatch(
+                path = Path.of("/repo/test/AppTest.kt"),
+                line = 7,
+                column = 12,
+                lineText = "assertNeedle()",
+                matchRanges = listOf(TextRange(6, 12)),
+            ),
+        ).toGroupedGrepListItems("/repo")
 
         assertEquals(5, items.size)
         assertEquals("App.kt", (items[0] as GrepFileHeaderItem).fileName)
@@ -77,18 +71,15 @@ class LiveGrepMatchListTest {
 
     @Test
     fun returnsFirstMatchIndexAfterHeader() {
-        val items = toGroupedGrepListItems(
-            listOf(
-                GrepMatch(
-                    path = Path.of("/repo/src/App.kt"),
-                    line = 12,
-                    column = 5,
-                    lineText = "fun needle",
-                    matchRanges = listOf(TextRange(4, 10)),
-                ),
+        val items = listOf(
+            GrepMatch(
+                path = Path.of("/repo/src/App.kt"),
+                line = 12,
+                column = 5,
+                lineText = "fun needle",
+                matchRanges = listOf(TextRange(4, 10)),
             ),
-            "/repo",
-        )
+        ).toGroupedGrepListItems("/repo")
 
         assertEquals(1, firstMatchIndex(items))
     }

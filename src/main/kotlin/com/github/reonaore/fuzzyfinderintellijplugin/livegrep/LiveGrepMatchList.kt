@@ -48,8 +48,8 @@ data class GrepMatchItem(
     val highlightRanges: List<TextRange>,
 ) : GrepListItem
 
-fun toGroupedGrepListItems(matches: List<GrepMatch>, basePath: String?): List<GrepListItem> {
-    return matches.groupBy(GrepMatch::path)
+fun List<GrepMatch>.toGroupedGrepListItems(basePath: String?): List<GrepListItem> {
+    return this.groupBy(GrepMatch::path)
         .flatMap { (path, matches) ->
             val header = GrepFileHeaderItem(
                 fileName = path.fileName?.toString().orEmpty().ifBlank { path.relativePathFrom(basePath) },

@@ -6,6 +6,7 @@ import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.CandidateListLoad
 import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.FuzzyFinderPreview
 import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.FuzzyFinderPreviewLoader
 import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.PreviewContent
+import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.contiguousHighlightRanges
 import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.fuzzyFinderSearchTextField
 import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.onTextChanged
 import com.intellij.openapi.application.EDT
@@ -34,6 +35,7 @@ import java.awt.BorderLayout
 import java.awt.Dimension
 import java.awt.event.ActionEvent
 import java.awt.event.KeyEvent
+import java.nio.file.Path
 import javax.swing.AbstractAction
 import javax.swing.Action
 import javax.swing.JComponent
@@ -122,7 +124,7 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
     }
 
     private fun bind() {
-        onTextChanged(searchField) {
+        searchField.onTextChanged {
             viewModel.onQueryChanged(searchField.text)
         }
         optionsPanel.setOnOptionsChanged {
@@ -137,10 +139,25 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
     }
 
     private fun bindViewModel() {
+        @Suppress("unused")
+        fun Path.toFileListItem(basePath: String?, query: String): FileListItem {
+            val relativePath = this.relativePathFrom(basePath)
+            val fileName = this.fileName?.toString().orEmpty().ifBlank { relativePath }
+            val secondaryPath = this.relativeParentPath(basePath)
+
+            return FileListItem(
+                path = this,
+                fileName = fileName,
+                secondaryPath = secondaryPath,
+                highlightRanges = contiguousHighlightRanges(fuzzyMatchIndexes(fileName, query).toSet()),
+                icon = this.fileIcon(),
+            )
+        }
+
         dialogScope.launch(dialogModalityContext()) {
             viewModel.state.collectLatest { state ->
                 val items = state.paths.map { path ->
-                    toFileListItem(path, project.basePath, state.query)
+                    path.toFileListItem(project.basePath, state.query)
                 }
                 withContext(Dispatchers.EDT) {
                     resultModel.replaceAll(items)

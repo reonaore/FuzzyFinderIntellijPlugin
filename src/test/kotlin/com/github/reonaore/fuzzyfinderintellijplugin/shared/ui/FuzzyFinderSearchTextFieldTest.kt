@@ -10,7 +10,7 @@ class FuzzyFinderSearchTextFieldTest {
         var changes = 0
         val field = fuzzyFinderSearchTextField(placeHolderText = "Search")
 
-        onTextChanged(field) { changes++ }
+        field.onTextChanged { changes++ }
         field.text = "abc"
 
         assertEquals(1, changes)

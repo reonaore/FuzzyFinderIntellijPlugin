@@ -91,11 +91,11 @@ class LiveGrepDialog(
 
 
     private fun bind() {
-        onTextChanged(searchField) {
+        searchField.onTextChanged {
             clearFzfQuery()
             viewModel.onRgQueryChanged(searchField.text)
         }
-        onTextChanged(fzfSearchField) {
+        fzfSearchField.onTextChanged {
             viewModel.onFzfQueryChanged(fzfSearchField.text)
         }
         optionsPanel.setOnOptionsChanged {
@@ -177,7 +177,7 @@ class LiveGrepDialog(
     private fun bindViewModel() {
         dialogScope.launch(dialogModalityContext()) {
             viewModel.state.collectLatest { state ->
-                val items = toGroupedGrepListItems(state.matches, project.basePath)
+                val items = state.matches.toGroupedGrepListItems(project.basePath)
                 withContext(Dispatchers.EDT) {
                     visibleMatches = state.matches
                     resultModel.replaceAll(items)
