@@ -3,6 +3,8 @@ package com.github.reonaore.fuzzyfinderintellijplugin.ui
 import com.github.reonaore.fuzzyfinderintellijplugin.MyBundle
 import com.github.reonaore.fuzzyfinderintellijplugin.services.FuzzyFinderService
 import com.github.reonaore.fuzzyfinderintellijplugin.services.GrepMatch
+import com.github.reonaore.fuzzyfinderintellijplugin.services.GrepSearchOptions
+import com.github.reonaore.fuzzyfinderintellijplugin.services.GrepSearchResult
 import com.github.reonaore.fuzzyfinderintellijplugin.services.PreviewHighlightRange
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.ModalityState
@@ -64,11 +66,13 @@ class LiveGrepDialog(
     private val dialogScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var previewJob: Job? = null
     private var visibleMatches: List<GrepMatch> = emptyList()
-    private var suppressRgSearchEvents = false
-    private var suppressFzfSearchEvents = false
     private val searchField = fuzzyFinderSearchTextField(placeHolderText = MyBundle.message("dialog.grep.search.placeholder"))
     private val fzfSearchField = fuzzyFinderSearchTextField(placeHolderText = MyBundle.message("dialog.grep.fuzzy.placeholder"))
-    private val viewModel = LiveGrepDialogViewModel(service, dialogScope, optionsPanel.currentOptions())
+    private val viewModel = LiveGrepDialogViewModel(
+        backend = FuzzyFinderLiveGrepSearchBackend(service),
+        scope = dialogScope,
+        initialOptions = optionsPanel.currentOptions(),
+    )
 
     init {
         title = MyBundle.message("dialog.grep.title")
@@ -82,15 +86,11 @@ class LiveGrepDialog(
 
     private fun bind() {
         searchField.onTextChanged {
-            if (!suppressRgSearchEvents) {
-                clearFzfQuery()
-                viewModel.onRgQueryChanged(searchField.text)
-            }
+            clearFzfQuery()
+            viewModel.onRgQueryChanged(searchField.text)
         }
         fzfSearchField.onTextChanged {
-            if (!suppressFzfSearchEvents) {
-                viewModel.onFzfQueryChanged(fzfSearchField.text)
-            }
+            viewModel.onFzfQueryChanged(fzfSearchField.text)
         }
         optionsPanel.setOnOptionsChanged {
             clearFzfQuery()
@@ -159,26 +159,13 @@ class LiveGrepDialog(
     private fun applyInitialQuery() {
         if (initialQuery.isBlank()) return
 
-        suppressRgSearchEvents = true
-        try {
-            searchField.text = initialQuery
-            searchField.textEditor.caretPosition = initialQuery.length
-        } finally {
-            suppressRgSearchEvents = false
-        }
-        viewModel.onRgQueryChanged(initialQuery)
+        searchField.text = initialQuery
     }
 
     private fun clearFzfQuery() {
         if (fzfSearchField.text.isEmpty()) return
 
-        suppressFzfSearchEvents = true
-        try {
-            fzfSearchField.text = ""
-        } finally {
-            suppressFzfSearchEvents = false
-        }
-        viewModel.onFzfQueryChanged("")
+        fzfSearchField.text = ""
     }
 
     private fun bindViewModel() {
@@ -337,5 +324,21 @@ class LiveGrepDialog(
         const val ACTION_TOGGLE_RESPECT_GITIGNORE = "liveGrep.toggleRespectGitIgnore"
         const val ACTION_TOGGLE_SMART_CASE = "liveGrep.toggleSmartCase"
         val MENU_SHORTCUT_KEY_MASK = if (SystemInfo.isMac) KeyEvent.META_DOWN_MASK else KeyEvent.CTRL_DOWN_MASK
+    }
+}
+
+private class FuzzyFinderLiveGrepSearchBackend(
+    private val service: FuzzyFinderService,
+) : LiveGrepSearchBackend {
+    override suspend fun grep(query: String, options: GrepSearchOptions): GrepSearchResult {
+        return service.grep(query, options, limit = Int.MAX_VALUE)
+    }
+
+    override suspend fun filterMatches(query: String, matches: List<GrepMatch>): List<GrepMatch> {
+        return service.filterGrepMatches(query, matches)
+    }
+
+    override fun notifyError(message: String) {
+        service.notifyError(message)
     }
 }
