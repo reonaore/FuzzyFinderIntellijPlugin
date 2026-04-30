@@ -1,9 +1,7 @@
 package com.github.reonaore.fuzzyfinderintellijplugin.ui
 
 import com.github.reonaore.fuzzyfinderintellijplugin.MyBundle
-import com.github.reonaore.fuzzyfinderintellijplugin.services.FuzzyFinderException
 import com.github.reonaore.fuzzyfinderintellijplugin.services.FuzzyFinderService
-import com.github.reonaore.fuzzyfinderintellijplugin.services.SearchResult
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.application.asContextElement
@@ -23,6 +21,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.awt.BorderLayout
@@ -34,13 +33,12 @@ import javax.swing.Action
 import javax.swing.JComponent
 import javax.swing.JPanel
 import javax.swing.KeyStroke
-import javax.swing.Timer
 import javax.swing.event.ListSelectionEvent
 
 class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, false) {
 
     private val service = project.service<FuzzyFinderService>()
-    private val optionsPanel = FuzzyFinderOptionsPanel { searchTimer.restart() }
+    private val optionsPanel = FuzzyFinderOptionsPanel()
     private val previewLoader = FuzzyFinderPreviewLoader()
     private val statusLabel = JBLabel(MyBundle.message("dialog.status.loading"))
     private val resultModel = CollectionListModel<FileListItem>()
@@ -58,21 +56,16 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
     )
     private val preview = FuzzyFinderPreview(project)
     private val dialogScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    private var searchJob: Job? = null
     private var previewJob: Job? = null
-    private val searchTimer = Timer(SEARCH_DEBOUNCE_MS) { triggerSearch() }.apply {
-        isRepeats = false
-    }
-    private val searchField = fuzzyFinderSearchTextField(placeHolderText = "Search") {
-        searchTimer.restart()
-    }
+    private val searchField = fuzzyFinderSearchTextField(placeHolderText = "Search")
+    private val viewModel = FuzzyFinderDialogViewModel(service, dialogScope, optionsPanel.currentOptions())
 
     init {
         title = MyBundle.message("dialog.title")
         setOKButtonText(MyBundle.message("dialog.open"))
         isOKActionEnabled = false
-        searchTimer.start()
         init()
+        bind()
     }
 
     override fun createCenterPanel(): JComponent {
@@ -110,7 +103,6 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
     override fun createActions(): Array<Action> = arrayOf(okAction, cancelAction)
 
     override fun dispose() {
-        searchTimer.stop()
         dialogScope.cancel()
         candidateListPanel.dispose()
         preview.dispose()
@@ -123,54 +115,51 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
         super.doOKAction()
     }
 
-    private fun triggerSearch() {
-        searchJob?.cancel()
-        val query = searchField.text
-        val options = optionsPanel.currentOptions()
-        statusLabel.text = MyBundle.message("dialog.status.searching")
-        candidateListPanel.showSearching(resultModel.size > 0)
-
-        searchJob = dialogScope.launch(ModalityState.defaultModalityState().asContextElement()) {
-            val res = service.search(query, options)
-            applySearchResult(res)
-        }.also {
-            it.invokeOnCompletion { e ->
-                if (e is FuzzyFinderException) {
-                    dialogScope.launch(Dispatchers.EDT) {
-                        statusLabel.text = MyBundle.message("dialog.status.error")
-                        candidateListPanel.showError()
-                        service.notifyError(e.message ?: MyBundle.message("dialog.status.error"))
-                    }
-                }
-            }
+    private fun bind() {
+        searchField.onTextChanged {
+            viewModel.onQueryChanged(searchField.text)
         }
+        optionsPanel.setOnOptionsChanged {
+            viewModel.onOptionsChanged(optionsPanel.currentOptions())
+        }
+        bindViewModel()
+        triggerInitialSearch()
     }
 
-    private suspend fun applySearchResult(searchResult: SearchResult) {
-        val paths = searchResult.results
-        val items = paths.map { path ->
-            path.toFileListItem(project.basePath, searchResult.query)
-        }
-        withContext(Dispatchers.EDT) {
-            resultModel.replaceAll(items)
-            candidateListPanel.showResults(items.isNotEmpty())
-            statusLabel.text = MyBundle.message(
-                "dialog.status.resultsDetailed",
-                paths.size,
-                searchResult.totalCandidates,
-            )
-            if (paths.isNotEmpty()) {
-                resultList.selectedIndex = 0
-            } else {
-                isOKActionEnabled = false
+    private fun triggerInitialSearch() {
+        viewModel.onQueryChanged(searchField.text)
+    }
+
+    private fun bindViewModel() {
+        dialogScope.launch(dialogModalityContext()) {
+            viewModel.state.collectLatest { state ->
+                val items = state.paths.map { path ->
+                    path.toFileListItem(project.basePath, state.query)
+                }
+                withContext(Dispatchers.EDT) {
+                    resultModel.replaceAll(items)
+                    if (state.isSearching) {
+                        candidateListPanel.showSearching(state.hasSearched)
+                    } else if (state.hasError) {
+                        candidateListPanel.showError()
+                    } else {
+                        candidateListPanel.showResults(items.isNotEmpty())
+                    }
+                    statusLabel.text = state.statusText
+                    if (state.paths.isNotEmpty()) {
+                        resultList.selectedIndex = 0
+                    } else {
+                        isOKActionEnabled = false
+                    }
+                }
+                updatePreview()
             }
         }
-        updatePreview()
     }
 
     private fun updatePreview(@Suppress("UNUSED_PARAMETER") event: ListSelectionEvent? = null) {
         previewJob?.cancel()
-        previewJob = dialogScope.launch(ModalityState.defaultModalityState().asContextElement()) {
+        previewJob = dialogScope.launch(dialogModalityContext()) {
             val selected = withContext(Dispatchers.EDT) {
                 resultList.selectedValue?.path
             } ?: run {
@@ -187,6 +176,8 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
             preview.show(previewContent)
         }
     }
+
+    private fun dialogModalityContext() = ModalityState.stateForComponent(rootPane).asContextElement()
 
     private fun selectedVirtualFile(): VirtualFile? {
         val selected = resultList.selectedValue?.path ?: return null
@@ -264,7 +255,6 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
         const val ACTION_TOGGLE_INCLUDE_HIDDEN = "fuzzyFinder.toggleIncludeHidden"
         const val ACTION_TOGGLE_FOLLOW_SYMLINKS = "fuzzyFinder.toggleFollowSymlinks"
         const val ACTION_TOGGLE_RESPECT_GITIGNORE = "fuzzyFinder.toggleRespectGitIgnore"
-        const val SEARCH_DEBOUNCE_MS = 180
         val MENU_SHORTCUT_KEY_MASK = if (SystemInfo.isMac) KeyEvent.META_DOWN_MASK else KeyEvent.CTRL_DOWN_MASK
     }
 }

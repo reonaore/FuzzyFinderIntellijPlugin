@@ -14,9 +14,8 @@ import javax.swing.JComponent
 import javax.swing.JLabel
 import javax.swing.JPanel
 
-class FuzzyFinderOptionsPanel(
-    private val onOptionsChanged: () -> Unit,
-) {
+class FuzzyFinderOptionsPanel {
+    private var onOptionsChangedCallback: () -> Unit = {}
     private val typeComboBox = JComboBox(FdEntryType.entries.toTypedArray())
     private val includeHiddenCheckBox = JCheckBox(mnemonicLabel("Hidden", 'H'))
     private val followSymlinksCheckBox = JCheckBox(mnemonicLabel("Follow symlinks", 's'))
@@ -45,20 +44,24 @@ class FuzzyFinderOptionsPanel(
         followSymlinksCheckBox.toolTipText = ALT_S_TOOLTIP
         respectGitIgnoreCheckBox.toolTipText = ALT_G_TOOLTIP
 
-        typeComboBox.addActionListener { onOptionsChanged() }
-        includeHiddenCheckBox.addActionListener { onOptionsChanged() }
-        followSymlinksCheckBox.addActionListener { onOptionsChanged() }
-        respectGitIgnoreCheckBox.addActionListener { onOptionsChanged() }
+        typeComboBox.addActionListener { onOptionsChangedCallback() }
+        includeHiddenCheckBox.addActionListener { onOptionsChangedCallback() }
+        followSymlinksCheckBox.addActionListener { onOptionsChangedCallback() }
+        respectGitIgnoreCheckBox.addActionListener { onOptionsChangedCallback() }
         extensionsField.document.addDocumentListener(object : DocumentAdapter() {
             override fun textChanged(e: javax.swing.event.DocumentEvent) {
-                onOptionsChanged()
+                onOptionsChangedCallback()
             }
         })
         excludeField.document.addDocumentListener(object : DocumentAdapter() {
             override fun textChanged(e: javax.swing.event.DocumentEvent) {
-                onOptionsChanged()
+                onOptionsChangedCallback()
             }
         })
+    }
+
+    fun setOnOptionsChanged(onOptionsChanged: () -> Unit) {
+        this.onOptionsChangedCallback = onOptionsChanged
     }
 
     fun component(): JComponent {
