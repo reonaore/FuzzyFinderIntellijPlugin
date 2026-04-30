@@ -72,16 +72,18 @@ class FuzzyFinderDialogViewModel(
         runCatching { service.search(query, options) }
             .onSuccess { applySearchResult(query, options, it) }
             .onFailure { throwable ->
-                if (throwable is FuzzyFinderException) {
-                    _state.value = _state.value.copy(
-                        query = query,
-                        options = options,
-                        isSearching = false,
-                        hasSearched = true,
-                        statusText = MyBundle.message("dialog.status.error"),
-                    )
-                    service.notifyError(throwable.message ?: MyBundle.message("dialog.status.error"))
-                }
+                _state.value = _state.value.copy(
+                    query = query,
+                    options = options,
+                    isSearching = false,
+                    hasSearched = true,
+                    statusText = MyBundle.message("dialog.status.error"),
+                )
+                val message = when (throwable) {
+                    is FuzzyFinderException -> throwable.message
+                    else -> throwable.localizedMessage
+                } ?: MyBundle.message("dialog.status.error")
+                service.notifyError(message)
             }
     }
 
