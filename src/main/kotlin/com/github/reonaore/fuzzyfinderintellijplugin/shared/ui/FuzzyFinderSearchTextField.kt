@@ -1,4 +1,4 @@
-package com.github.reonaore.fuzzyfinderintellijplugin.ui
+package com.github.reonaore.fuzzyfinderintellijplugin.shared.ui
 
 import com.intellij.ui.DocumentAdapter
 import com.intellij.ui.SearchTextField

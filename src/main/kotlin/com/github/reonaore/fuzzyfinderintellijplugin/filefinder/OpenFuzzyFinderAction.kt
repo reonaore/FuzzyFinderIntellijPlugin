@@ -1,7 +1,6 @@
-package com.github.reonaore.fuzzyfinderintellijplugin.actions
+package com.github.reonaore.fuzzyfinderintellijplugin.filefinder
 
 import com.github.reonaore.fuzzyfinderintellijplugin.MyBundle
-import com.github.reonaore.fuzzyfinderintellijplugin.ui.FuzzyFinderDialog
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.project.DumbAwareAction

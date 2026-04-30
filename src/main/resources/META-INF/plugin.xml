@@ -19,15 +19,15 @@
 
     <actions>
         <action
-                id="com.github.reonaore.fuzzyfinderintellijplugin.actions.OpenFuzzyFinderAction"
-                class="com.github.reonaore.fuzzyfinderintellijplugin.actions.OpenFuzzyFinderAction"
+                id="com.github.reonaore.fuzzyfinderintellijplugin.filefinder.OpenFuzzyFinderAction"
+                class="com.github.reonaore.fuzzyfinderintellijplugin.filefinder.OpenFuzzyFinderAction"
                 text="Open Fuzzy Finder"
                 description="Search project files with fd and fzf">
             <add-to-group group-id="ToolsMenu" anchor="last" />
         </action>
         <action
-                id="com.github.reonaore.fuzzyfinderintellijplugin.actions.OpenLiveGrepAction"
-                class="com.github.reonaore.fuzzyfinderintellijplugin.actions.OpenLiveGrepAction"
+                id="com.github.reonaore.fuzzyfinderintellijplugin.livegrep.OpenLiveGrepAction"
+                class="com.github.reonaore.fuzzyfinderintellijplugin.livegrep.OpenLiveGrepAction"
                 text="Open Live Grep"
                 description="Search project text with rg">
             <add-to-group group-id="ToolsMenu" anchor="last" />

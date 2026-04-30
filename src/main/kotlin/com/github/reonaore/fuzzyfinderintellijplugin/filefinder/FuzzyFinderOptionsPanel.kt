@@ -1,4 +1,4 @@
-package com.github.reonaore.fuzzyfinderintellijplugin.ui
+package com.github.reonaore.fuzzyfinderintellijplugin.filefinder
 
 import com.github.reonaore.fuzzyfinderintellijplugin.services.FdEntryType
 import com.github.reonaore.fuzzyfinderintellijplugin.services.FdSearchOptions

@@ -1,7 +1,6 @@
-package com.github.reonaore.fuzzyfinderintellijplugin.actions
+package com.github.reonaore.fuzzyfinderintellijplugin.livegrep
 
 import com.github.reonaore.fuzzyfinderintellijplugin.MyBundle
-import com.github.reonaore.fuzzyfinderintellijplugin.ui.LiveGrepDialog
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CommonDataKeys

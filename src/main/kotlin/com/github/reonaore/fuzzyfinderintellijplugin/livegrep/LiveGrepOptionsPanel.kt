@@ -1,5 +1,6 @@
-package com.github.reonaore.fuzzyfinderintellijplugin.ui
+package com.github.reonaore.fuzzyfinderintellijplugin.livegrep
 
+import com.github.reonaore.fuzzyfinderintellijplugin.filefinder.FuzzyFinderOptionsPanel
 import com.github.reonaore.fuzzyfinderintellijplugin.services.GrepSearchOptions
 import com.intellij.ui.DocumentAdapter
 import com.intellij.ui.components.JBTextField
