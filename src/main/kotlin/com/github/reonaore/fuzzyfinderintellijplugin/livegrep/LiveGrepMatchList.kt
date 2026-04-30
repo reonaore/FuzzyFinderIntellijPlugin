@@ -48,8 +48,8 @@ data class GrepMatchItem(
     val highlightRanges: List<TextRange>,
 ) : GrepListItem
 
-fun List<GrepMatch>.toGroupedGrepListItems(basePath: String?): List<GrepListItem> {
-    return groupBy(GrepMatch::path)
+fun toGroupedGrepListItems(matches: List<GrepMatch>, basePath: String?): List<GrepListItem> {
+    return matches.groupBy(GrepMatch::path)
         .flatMap { (path, matches) ->
             val header = GrepFileHeaderItem(
                 fileName = path.fileName?.toString().orEmpty().ifBlank { path.relativePathFrom(basePath) },
@@ -58,26 +58,23 @@ fun List<GrepMatch>.toGroupedGrepListItems(basePath: String?): List<GrepListItem
                 icon = path.fileIcon(),
             )
             listOf(header) + matches.map { match ->
-                match.toGrepListItem(
-                    fileName = header.fileName,
-                    secondaryPath = header.secondaryPath,
-                )
+                toGrepListItem(match, header.fileName, header.secondaryPath)
             }
         }
 }
 
 fun firstMatchIndex(items: List<GrepListItem>): Int {
-    return items.indexOfFirst { it.match != null }
+    return items.indexOfFirst { it is GrepMatchItem }
 }
 
-private fun GrepMatch.toGrepListItem(fileName: String, secondaryPath: String?): GrepMatchItem {
+private fun toGrepListItem(match: GrepMatch, fileName: String, secondaryPath: String?): GrepMatchItem {
     return GrepMatchItem(
-        match = this,
+        match = match,
         fileName = fileName,
         secondaryPath = secondaryPath,
-        location = "$line:$column",
-        lineText = lineText,
-        highlightRanges = matchRanges,
+        location = "${match.line}:${match.column}",
+        lineText = match.lineText,
+        highlightRanges = match.matchRanges,
     )
 }
 

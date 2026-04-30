@@ -67,7 +67,7 @@ class FuzzyFinderOptionsPanelTest {
 
         panel.setExtensionsText("kt")
 
-        assertEquals("kt", panel.extensionsText())
+        assertEquals(listOf("kt"), panel.currentOptions().includeExtensions)
         assertEquals(1, changes)
     }
 
@@ -87,7 +87,7 @@ class FuzzyFinderOptionsPanelTest {
 
         panel.setExcludeText("build")
 
-        assertEquals("build", panel.excludeText())
+        assertEquals(listOf("build"), panel.currentOptions().excludePatterns)
         assertTrue(changes > 0)
     }
 

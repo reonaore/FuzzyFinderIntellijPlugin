@@ -122,7 +122,7 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
     }
 
     private fun bind() {
-        searchField.onTextChanged {
+        onTextChanged(searchField) {
             viewModel.onQueryChanged(searchField.text)
         }
         optionsPanel.setOnOptionsChanged {
@@ -140,7 +140,7 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
         dialogScope.launch(dialogModalityContext()) {
             viewModel.state.collectLatest { state ->
                 val items = state.paths.map { path ->
-                    path.toFileListItem(project.basePath, state.query)
+                    toFileListItem(path, project.basePath, state.query)
                 }
                 withContext(Dispatchers.EDT) {
                     resultModel.replaceAll(items)
@@ -246,9 +246,9 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
         val lastIndex = resultModel.size - 1
         if (lastIndex < 0) return
 
-        val currentIndex = resultList.selectedIndex.takeIf { it >= 0 } ?: 0
+        val selectedIndex = resultList.selectedIndex
+        val currentIndex = selectedIndex.takeIf { it >= 0 } ?: 0
         val nextIndex = (currentIndex + offset).coerceIn(0, lastIndex)
-        if (nextIndex == resultList.selectedIndex) return
 
         resultList.selectedIndex = nextIndex
         resultList.ensureIndexIsVisible(nextIndex)

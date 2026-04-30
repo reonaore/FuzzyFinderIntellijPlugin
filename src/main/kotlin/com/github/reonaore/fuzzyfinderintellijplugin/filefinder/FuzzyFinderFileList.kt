@@ -40,17 +40,17 @@ fun Path.relativePathFrom(basePath: String?): String {
         .toString()
 }
 
-fun Path.toFileListItem(basePath: String?, query: String): FileListItem {
-    val relativePath = relativePathFrom(basePath)
-    val fileName = fileName?.toString().orEmpty().ifBlank { relativePath }
-    val secondaryPath = relativeParentPath(basePath)
+fun toFileListItem(path: Path, basePath: String?, query: String): FileListItem {
+    val relativePath = path.relativePathFrom(basePath)
+    val fileName = path.fileName?.toString().orEmpty().ifBlank { relativePath }
+    val secondaryPath = path.relativeParentPath(basePath)
 
     return FileListItem(
-        path = this,
+        path = path,
         fileName = fileName,
         secondaryPath = secondaryPath,
         highlightRanges = contiguousHighlightRanges(fuzzyMatchIndexes(fileName, query).toSet()),
-        icon = fileIcon(),
+        icon = path.fileIcon(),
     )
 }
 

@@ -12,8 +12,8 @@ fun fuzzyFinderSearchTextField(
     }
 }
 
-fun SearchTextField.onTextChanged(onTextChanged: (event: DocumentEvent) -> Unit) {
-    addDocumentListener(object : DocumentAdapter() {
+fun onTextChanged(field: SearchTextField, onTextChanged: (event: DocumentEvent) -> Unit) {
+    field.addDocumentListener(object : DocumentAdapter() {
         override fun textChanged(e: DocumentEvent) {
             onTextChanged(e)
         }

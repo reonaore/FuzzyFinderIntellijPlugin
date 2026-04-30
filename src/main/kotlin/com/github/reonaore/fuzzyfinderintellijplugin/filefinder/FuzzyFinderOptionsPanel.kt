@@ -4,6 +4,7 @@ import com.github.reonaore.fuzzyfinderintellijplugin.services.FdEntryType
 import com.github.reonaore.fuzzyfinderintellijplugin.services.FdSearchOptions
 import com.intellij.ui.DocumentAdapter
 import com.intellij.ui.components.JBTextField
+import java.awt.Component
 import java.awt.GridBagConstraints
 import java.awt.GridBagLayout
 import java.awt.Insets
@@ -69,10 +70,11 @@ class FuzzyFinderOptionsPanel {
             extensionsField.columns = 12
             excludeField.columns = 20
 
-            addOptionComponent(extensionsLabel, gridx = 0, gridy = 0)
-            addOptionComponent(extensionsField, gridx = 1, gridy = 0)
-            addOptionComponent(excludeLabel, gridx = 2, gridy = 0)
+            addOptionComponent(this, extensionsLabel, gridx = 0, gridy = 0)
+            addOptionComponent(this, extensionsField, gridx = 1, gridy = 0)
+            addOptionComponent(this, excludeLabel, gridx = 2, gridy = 0)
             addOptionComponent(
+                this,
                 excludeField,
                 gridx = 3,
                 gridy = 0,
@@ -80,11 +82,12 @@ class FuzzyFinderOptionsPanel {
                 weightx = 1.0,
                 fill = GridBagConstraints.HORIZONTAL,
             )
-            addOptionComponent(JLabel("Type"), gridx = 0, gridy = 1, topInset = 4)
-            addOptionComponent(typeComboBox, gridx = 1, gridy = 1, topInset = 4)
-            addOptionComponent(includeHiddenCheckBox, gridx = 2, gridy = 1, topInset = 4)
-            addOptionComponent(followSymlinksCheckBox, gridx = 3, gridy = 1, topInset = 4)
+            addOptionComponent(this, JLabel("Type"), gridx = 0, gridy = 1, topInset = 4)
+            addOptionComponent(this, typeComboBox, gridx = 1, gridy = 1, topInset = 4)
+            addOptionComponent(this, includeHiddenCheckBox, gridx = 2, gridy = 1, topInset = 4)
+            addOptionComponent(this, followSymlinksCheckBox, gridx = 3, gridy = 1, topInset = 4)
             addOptionComponent(
+                this,
                 respectGitIgnoreCheckBox,
                 gridx = 4,
                 gridy = 1,
@@ -96,7 +99,7 @@ class FuzzyFinderOptionsPanel {
 
     fun currentOptions(): FdSearchOptions {
         return FdSearchOptions(
-            entryType = typeComboBox.selectedItem as? FdEntryType ?: FdEntryType.FILES,
+            entryType = selectedEntryType(),
             includeHidden = includeHiddenCheckBox.isSelected,
             followSymlinks = followSymlinksCheckBox.isSelected,
             respectGitIgnore = respectGitIgnoreCheckBox.isSelected,
@@ -110,6 +113,10 @@ class FuzzyFinderOptionsPanel {
             .split(',')
             .map(String::trim)
             .filter(String::isNotEmpty)
+    }
+
+    private fun selectedEntryType(): FdEntryType {
+        return typeComboBox.getItemAt(typeComboBox.selectedIndex.coerceAtLeast(0))
     }
 
     fun toggleIncludeHidden() {
@@ -146,13 +153,9 @@ class FuzzyFinderOptionsPanel {
         extensionsField.text = text
     }
 
-    internal fun extensionsText(): String = extensionsField.text
-
     internal fun setExcludeText(text: String) {
         excludeField.text = text
     }
-
-    internal fun excludeText(): String = excludeField.text
 
     internal fun excludeFieldIsEditable(): Boolean = excludeField.isEditable
 
@@ -160,21 +163,21 @@ class FuzzyFinderOptionsPanel {
 
     internal fun extensionsLabelMnemonic(): Int = extensionsLabel.displayedMnemonic
 
-    internal fun extensionsLabelTarget(): JComponent? = extensionsLabel.labelFor as? JComponent
+    internal fun extensionsLabelTarget(): Component = extensionsLabel.labelFor
 
     internal fun extensionsFieldComponent(): JComponent = extensionsField
 
-    internal fun extensionsTooltipText(): String? = extensionsLabel.toolTipText
+    internal fun extensionsTooltipText(): String = extensionsLabel.toolTipText
 
     internal fun excludeLabelText(): String = excludeLabel.text
 
     internal fun excludeLabelMnemonic(): Int = excludeLabel.displayedMnemonic
 
-    internal fun excludeLabelTarget(): JComponent? = excludeLabel.labelFor as? JComponent
+    internal fun excludeLabelTarget(): Component = excludeLabel.labelFor
 
     internal fun excludeFieldComponent(): JComponent = excludeField
 
-    internal fun excludeTooltipText(): String? = excludeLabel.toolTipText
+    internal fun excludeTooltipText(): String = excludeLabel.toolTipText
 
     companion object {
         const val DEFAULT_EXCLUDES = ".git"
@@ -189,12 +192,7 @@ class FuzzyFinderOptionsPanel {
             return buildString(label.length + 13) {
                 append("<html>")
                 label.forEach { char ->
-                    val escaped = when (char) {
-                        '<' -> "&lt;"
-                        '>' -> "&gt;"
-                        '&' -> "&amp;"
-                        else -> char.toString()
-                    }
+                    val escaped = HTML_ESCAPES[char] ?: char.toString()
                     if (!underlined && char.equals(mnemonicChar, ignoreCase = true)) {
                         append("<u>")
                         append(escaped)
@@ -207,10 +205,17 @@ class FuzzyFinderOptionsPanel {
                 append("</html>")
             }
         }
+
+        private val HTML_ESCAPES = mapOf(
+            '<' to "&lt;",
+            '>' to "&gt;",
+            '&' to "&amp;",
+        )
     }
 }
 
-private fun JPanel.addOptionComponent(
+private fun addOptionComponent(
+    panel: JPanel,
     component: JComponent,
     gridx: Int,
     gridy: Int,
@@ -219,7 +224,7 @@ private fun JPanel.addOptionComponent(
     fill: Int = GridBagConstraints.NONE,
     topInset: Int = 0,
 ) {
-    add(
+    panel.add(
         component,
         GridBagConstraints().apply {
             this.gridx = gridx

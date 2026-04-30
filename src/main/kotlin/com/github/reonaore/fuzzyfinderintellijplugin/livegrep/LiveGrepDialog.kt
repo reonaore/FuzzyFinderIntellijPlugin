@@ -91,11 +91,11 @@ class LiveGrepDialog(
 
 
     private fun bind() {
-        searchField.onTextChanged {
+        onTextChanged(searchField) {
             clearFzfQuery()
             viewModel.onRgQueryChanged(searchField.text)
         }
-        fzfSearchField.onTextChanged {
+        onTextChanged(fzfSearchField) {
             viewModel.onFzfQueryChanged(fzfSearchField.text)
         }
         optionsPanel.setOnOptionsChanged {
@@ -177,7 +177,7 @@ class LiveGrepDialog(
     private fun bindViewModel() {
         dialogScope.launch(dialogModalityContext()) {
             viewModel.state.collectLatest { state ->
-                val items = state.matches.toGroupedGrepListItems(project.basePath)
+                val items = toGroupedGrepListItems(state.matches, project.basePath)
                 withContext(Dispatchers.EDT) {
                     visibleMatches = state.matches
                     resultModel.replaceAll(items)
@@ -301,9 +301,10 @@ class LiveGrepDialog(
         val lastIndex = resultModel.size - 1
         if (lastIndex < 0) return
 
-        val currentIndex = resultList.selectedIndex.takeIf { it >= 0 } ?: 0
+        val selectedIndex = resultList.selectedIndex
+        val currentIndex = selectedIndex.takeIf { it >= 0 } ?: 0
         val nextIndex = nextMatchIndex(currentIndex, offset, lastIndex)
-        if (nextIndex == resultList.selectedIndex) return
+        if (selectedIndex >= 0 && nextIndex == selectedIndex) return
 
         resultList.selectedIndex = nextIndex
         resultList.ensureIndexIsVisible(nextIndex)
@@ -311,7 +312,7 @@ class LiveGrepDialog(
 
     private fun nextMatchIndex(currentIndex: Int, offset: Int, lastIndex: Int): Int {
         var nextIndex = (currentIndex + offset).coerceIn(0, lastIndex)
-        while (nextIndex in 0..lastIndex && resultModel.getElementAt(nextIndex).match == null) {
+        while (nextIndex in 0..lastIndex && resultModel.getElementAt(nextIndex) is GrepFileHeaderItem) {
             val candidate = (nextIndex + offset.coerceIn(-1, 1)).coerceIn(0, lastIndex)
             if (candidate == nextIndex) {
                 break

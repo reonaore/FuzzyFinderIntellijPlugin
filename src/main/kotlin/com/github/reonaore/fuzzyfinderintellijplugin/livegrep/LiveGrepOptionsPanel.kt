@@ -4,6 +4,7 @@ import com.github.reonaore.fuzzyfinderintellijplugin.filefinder.FuzzyFinderOptio
 import com.github.reonaore.fuzzyfinderintellijplugin.services.GrepSearchOptions
 import com.intellij.ui.DocumentAdapter
 import com.intellij.ui.components.JBTextField
+import java.awt.Component
 import java.awt.GridBagConstraints
 import java.awt.GridBagLayout
 import java.awt.Insets
@@ -70,20 +71,21 @@ class LiveGrepOptionsPanel {
             extensionsField.columns = 12
             excludeField.columns = 20
 
-            addOptionComponent(extensionsLabel, gridx = 0, gridy = 0)
-            addOptionComponent(extensionsField, gridx = 1, gridy = 0)
-            addOptionComponent(excludeLabel, gridx = 2, gridy = 0)
+            addOptionComponent(this, extensionsLabel, gridx = 0, gridy = 0)
+            addOptionComponent(this, extensionsField, gridx = 1, gridy = 0)
+            addOptionComponent(this, excludeLabel, gridx = 2, gridy = 0)
             addOptionComponent(
+                this,
                 excludeField,
                 gridx = 3,
                 gridy = 0,
                 weightx = 1.0,
                 fill = GridBagConstraints.HORIZONTAL,
             )
-            addOptionComponent(includeHiddenCheckBox, gridx = 0, gridy = 1, topInset = 4)
-            addOptionComponent(followSymlinksCheckBox, gridx = 1, gridy = 1, topInset = 4)
-            addOptionComponent(respectGitIgnoreCheckBox, gridx = 2, gridy = 1, topInset = 4)
-            addOptionComponent(smartCaseCheckBox, gridx = 3, gridy = 1, weightx = 1.0, topInset = 4)
+            addOptionComponent(this, includeHiddenCheckBox, gridx = 0, gridy = 1, topInset = 4)
+            addOptionComponent(this, followSymlinksCheckBox, gridx = 1, gridy = 1, topInset = 4)
+            addOptionComponent(this, respectGitIgnoreCheckBox, gridx = 2, gridy = 1, topInset = 4)
+            addOptionComponent(this, smartCaseCheckBox, gridx = 3, gridy = 1, weightx = 1.0, topInset = 4)
         }
     }
 
@@ -109,14 +111,6 @@ class LiveGrepOptionsPanel {
         extensionsField.text = text
     }
 
-    internal fun extensionsText(): String = extensionsField.text
-
-    internal fun setExcludeText(text: String) {
-        excludeField.text = text
-    }
-
-    internal fun excludeText(): String = excludeField.text
-
     fun toggleIncludeHidden() {
         toggle(includeHiddenCheckBox)
     }
@@ -137,37 +131,31 @@ class LiveGrepOptionsPanel {
         checkBox.doClick(0)
     }
 
-    internal fun includeHiddenLabelText(): String = includeHiddenCheckBox.text
-
     internal fun includeHiddenComponent(): JComponent = includeHiddenCheckBox
-
-    internal fun followSymlinksLabelText(): String = followSymlinksCheckBox.text
-
-    internal fun respectGitIgnoreLabelText(): String = respectGitIgnoreCheckBox.text
 
     internal fun smartCaseLabelText(): String = smartCaseCheckBox.text
 
-    internal fun smartCaseTooltipText(): String? = smartCaseCheckBox.toolTipText
+    internal fun smartCaseTooltipText(): String = smartCaseCheckBox.toolTipText
 
     internal fun extensionsLabelText(): String = extensionsLabel.text
 
     internal fun extensionsLabelMnemonic(): Int = extensionsLabel.displayedMnemonic
 
-    internal fun extensionsLabelTarget(): JComponent? = extensionsLabel.labelFor as? JComponent
+    internal fun extensionsLabelTarget(): Component = extensionsLabel.labelFor
 
     internal fun extensionsFieldComponent(): JComponent = extensionsField
 
-    internal fun extensionsTooltipText(): String? = extensionsLabel.toolTipText
+    internal fun extensionsTooltipText(): String = extensionsLabel.toolTipText
 
     internal fun excludeLabelText(): String = excludeLabel.text
 
     internal fun excludeLabelMnemonic(): Int = excludeLabel.displayedMnemonic
 
-    internal fun excludeLabelTarget(): JComponent? = excludeLabel.labelFor as? JComponent
+    internal fun excludeLabelTarget(): Component = excludeLabel.labelFor
 
     internal fun excludeFieldComponent(): JComponent = excludeField
 
-    internal fun excludeTooltipText(): String? = excludeLabel.toolTipText
+    internal fun excludeTooltipText(): String = excludeLabel.toolTipText
 
     private companion object {
         const val DEFAULT_EXCLUDES = ".git"
@@ -180,7 +168,8 @@ class LiveGrepOptionsPanel {
     }
 }
 
-private fun JPanel.addOptionComponent(
+private fun addOptionComponent(
+    panel: JPanel,
     component: JComponent,
     gridx: Int,
     gridy: Int,
@@ -188,7 +177,7 @@ private fun JPanel.addOptionComponent(
     fill: Int = GridBagConstraints.NONE,
     topInset: Int = 0,
 ) {
-    add(
+    panel.add(
         component,
         GridBagConstraints().apply {
             this.gridx = gridx
