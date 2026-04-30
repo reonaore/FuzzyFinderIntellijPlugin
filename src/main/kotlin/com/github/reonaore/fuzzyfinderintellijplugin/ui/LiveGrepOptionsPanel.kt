@@ -3,7 +3,9 @@ package com.github.reonaore.fuzzyfinderintellijplugin.ui
 import com.github.reonaore.fuzzyfinderintellijplugin.services.GrepSearchOptions
 import com.intellij.ui.DocumentAdapter
 import com.intellij.ui.components.JBTextField
-import java.awt.FlowLayout
+import java.awt.GridBagConstraints
+import java.awt.GridBagLayout
+import java.awt.Insets
 import java.awt.event.KeyEvent
 import javax.swing.JCheckBox
 import javax.swing.JComponent
@@ -60,17 +62,24 @@ class LiveGrepOptionsPanel(
     }
 
     fun component(): JComponent {
-        return JPanel(FlowLayout(FlowLayout.LEFT, 8, 0)).apply {
-            add(includeHiddenCheckBox)
-            add(followSymlinksCheckBox)
-            add(respectGitIgnoreCheckBox)
-            add(smartCaseCheckBox)
-            add(extensionsLabel)
+        return JPanel(GridBagLayout()).apply {
             extensionsField.columns = 12
-            add(extensionsField)
-            add(excludeLabel)
             excludeField.columns = 20
-            add(excludeField)
+
+            addOptionComponent(extensionsLabel, gridx = 0, gridy = 0)
+            addOptionComponent(extensionsField, gridx = 1, gridy = 0)
+            addOptionComponent(excludeLabel, gridx = 2, gridy = 0)
+            addOptionComponent(
+                excludeField,
+                gridx = 3,
+                gridy = 0,
+                weightx = 1.0,
+                fill = GridBagConstraints.HORIZONTAL,
+            )
+            addOptionComponent(includeHiddenCheckBox, gridx = 0, gridy = 1, topInset = 4)
+            addOptionComponent(followSymlinksCheckBox, gridx = 1, gridy = 1, topInset = 4)
+            addOptionComponent(respectGitIgnoreCheckBox, gridx = 2, gridy = 1, topInset = 4)
+            addOptionComponent(smartCaseCheckBox, gridx = 3, gridy = 1, weightx = 1.0, topInset = 4)
         }
     }
 
@@ -126,6 +135,8 @@ class LiveGrepOptionsPanel(
 
     internal fun includeHiddenLabelText(): String = includeHiddenCheckBox.text
 
+    internal fun includeHiddenComponent(): JComponent = includeHiddenCheckBox
+
     internal fun followSymlinksLabelText(): String = followSymlinksCheckBox.text
 
     internal fun respectGitIgnoreLabelText(): String = respectGitIgnoreCheckBox.text
@@ -163,4 +174,25 @@ class LiveGrepOptionsPanel(
         const val ALT_E_TOOLTIP = "Alt+E"
         const val ALT_X_TOOLTIP = "Alt+X"
     }
+}
+
+private fun JPanel.addOptionComponent(
+    component: JComponent,
+    gridx: Int,
+    gridy: Int,
+    weightx: Double = 0.0,
+    fill: Int = GridBagConstraints.NONE,
+    topInset: Int = 0,
+) {
+    add(
+        component,
+        GridBagConstraints().apply {
+            this.gridx = gridx
+            this.gridy = gridy
+            this.weightx = weightx
+            this.fill = fill
+            anchor = GridBagConstraints.WEST
+            insets = Insets(topInset, 0, 0, 8)
+        },
+    )
 }

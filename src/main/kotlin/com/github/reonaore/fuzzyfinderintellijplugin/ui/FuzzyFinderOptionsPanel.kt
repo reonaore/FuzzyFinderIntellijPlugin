@@ -66,21 +66,26 @@ class FuzzyFinderOptionsPanel(
             extensionsField.columns = 12
             excludeField.columns = 20
 
-            addOptionComponent(JLabel("Type"), gridx = 0, gridy = 0)
-            addOptionComponent(typeComboBox, gridx = 1, gridy = 0)
-            addOptionComponent(includeHiddenCheckBox, gridx = 2, gridy = 0)
-            addOptionComponent(followSymlinksCheckBox, gridx = 3, gridy = 0)
-            addOptionComponent(respectGitIgnoreCheckBox, gridx = 4, gridy = 0, weightx = 1.0)
-            addOptionComponent(extensionsLabel, gridx = 0, gridy = 1, topInset = 4)
-            addOptionComponent(extensionsField, gridx = 1, gridy = 1, topInset = 4)
-            addOptionComponent(excludeLabel, gridx = 2, gridy = 1, topInset = 4)
+            addOptionComponent(extensionsLabel, gridx = 0, gridy = 0)
+            addOptionComponent(extensionsField, gridx = 1, gridy = 0)
+            addOptionComponent(excludeLabel, gridx = 2, gridy = 0)
             addOptionComponent(
                 excludeField,
                 gridx = 3,
-                gridy = 1,
+                gridy = 0,
                 gridwidth = 2,
                 weightx = 1.0,
                 fill = GridBagConstraints.HORIZONTAL,
+            )
+            addOptionComponent(JLabel("Type"), gridx = 0, gridy = 1, topInset = 4)
+            addOptionComponent(typeComboBox, gridx = 1, gridy = 1, topInset = 4)
+            addOptionComponent(includeHiddenCheckBox, gridx = 2, gridy = 1, topInset = 4)
+            addOptionComponent(followSymlinksCheckBox, gridx = 3, gridy = 1, topInset = 4)
+            addOptionComponent(
+                respectGitIgnoreCheckBox,
+                gridx = 4,
+                gridy = 1,
+                weightx = 1.0,
                 topInset = 4,
             )
         }
@@ -121,6 +126,8 @@ class FuzzyFinderOptionsPanel(
     }
 
     internal fun includeHiddenLabelText(): String = includeHiddenCheckBox.text
+
+    internal fun includeHiddenComponent(): JComponent = includeHiddenCheckBox
 
     internal fun followSymlinksLabelText(): String = followSymlinksCheckBox.text
 

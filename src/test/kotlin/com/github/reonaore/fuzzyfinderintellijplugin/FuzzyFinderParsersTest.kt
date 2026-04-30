@@ -165,6 +165,11 @@ class FuzzyFinderParsersTest {
         assertNotNull(MyBundle.message("dialog.status.loadingProgress", 42))
         assertNotNull(MyBundle.message("dialog.status.resultsDetailed", 10, 100))
         assertNotNull(MyBundle.message("dialog.grep.status.resultsDetailed", 10, 100))
+        assertNotNull(MyBundle.message("dialog.grep.candidates.prompt"))
+        assertNotNull(MyBundle.message("dialog.candidates.searching"))
+        assertNotNull(MyBundle.message("dialog.candidates.updating"))
+        assertNotNull(MyBundle.message("dialog.candidates.empty"))
+        assertNotNull(MyBundle.message("dialog.candidates.error"))
         assertNotNull(MyBundle.message("error.commandFailed", "cmd", 1, "stderr"))
     }
 }

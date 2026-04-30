@@ -57,6 +57,11 @@ class LiveGrepDialog(
             doOKAction()
         }
     }
+    private val candidateListPanel = CandidateListLoadingPanel(
+        resultList,
+        ScrollPaneFactory.createScrollPane(resultList),
+        MyBundle.message("dialog.grep.candidates.prompt"),
+    )
     private val preview = FuzzyFinderPreview(project)
     private val dialogScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var rgSearchJob: Job? = null
@@ -103,7 +108,7 @@ class LiveGrepDialog(
 
         val splitter = JBSplitter(false, 0.42f).apply {
             firstComponent = JPanel(BorderLayout()).apply {
-                add(ScrollPaneFactory.createScrollPane(resultList), BorderLayout.CENTER)
+                add(candidateListPanel.component, BorderLayout.CENTER)
             }
             secondComponent = preview.editor.component
         }
@@ -120,6 +125,8 @@ class LiveGrepDialog(
             installCandidateNavigationShortcuts(fzfSearchField)
             installCandidateNavigationShortcuts(fzfSearchField.textEditor)
             installCandidateNavigationShortcuts(fzfSearchField.textEditor, JComponent.WHEN_FOCUSED)
+            installCandidateNavigationShortcuts(optionsPanel.extensionsFieldComponent(), JComponent.WHEN_FOCUSED)
+            installCandidateNavigationShortcuts(optionsPanel.excludeFieldComponent(), JComponent.WHEN_FOCUSED)
         }
     }
 
@@ -134,6 +141,7 @@ class LiveGrepDialog(
         rgSearchTimer.stop()
         fzfSearchTimer.stop()
         dialogScope.cancel()
+        candidateListPanel.dispose()
         preview.dispose()
         super.dispose()
     }
@@ -158,7 +166,12 @@ class LiveGrepDialog(
         fzfSearchTimer.stop()
         val query = searchField.text
         val options = optionsPanel.currentOptions()
+        if (query.isBlank()) {
+            showGrepPrompt()
+            return
+        }
         statusLabel.text = MyBundle.message("dialog.status.searching")
+        candidateListPanel.showSearching(resultModel.size > 0)
 
         rgSearchJob = dialogScope.launch(ModalityState.defaultModalityState().asContextElement()) {
             val res = service.grep(query, options, limit = Int.MAX_VALUE)
@@ -178,6 +191,7 @@ class LiveGrepDialog(
                 if (e is FuzzyFinderException) {
                     dialogScope.launch(Dispatchers.EDT) {
                         statusLabel.text = MyBundle.message("dialog.status.error")
+                        candidateListPanel.showError()
                         service.notifyError(e.message ?: MyBundle.message("dialog.status.error"))
                     }
                 }
@@ -219,6 +233,10 @@ class LiveGrepDialog(
 
     private fun startFzfSearch(query: String, showSearching: Boolean = true) {
         fzfSearchJob?.cancel()
+        if (showSearching) {
+            statusLabel.text = MyBundle.message("dialog.status.searching")
+            candidateListPanel.showSearching(resultModel.size > 0)
+        }
         if (query.isBlank()) {
             fzfSearchJob = dialogScope.launch(ModalityState.defaultModalityState().asContextElement()) {
                 applySearchResult(cachedRgMatches.take(MAX_RESULTS), cachedRgMatches.size)
@@ -226,9 +244,6 @@ class LiveGrepDialog(
             return
         }
 
-        if (showSearching) {
-            statusLabel.text = MyBundle.message("dialog.status.searching")
-        }
         fzfSearchJob = dialogScope.launch(ModalityState.defaultModalityState().asContextElement()) {
             applyFilteredSearchResult(query)
         }.also {
@@ -236,6 +251,7 @@ class LiveGrepDialog(
                 if (e is FuzzyFinderException) {
                     dialogScope.launch(Dispatchers.EDT) {
                         statusLabel.text = MyBundle.message("dialog.status.error")
+                        candidateListPanel.showError()
                         service.notifyError(e.message ?: MyBundle.message("dialog.status.error"))
                     }
                 }
@@ -253,6 +269,7 @@ class LiveGrepDialog(
         withContext(Dispatchers.EDT) {
             visibleMatches = matches
             resultModel.replaceAll(items)
+            candidateListPanel.showResults(matches.isNotEmpty())
             statusLabel.text = MyBundle.message(
                 "dialog.grep.status.resultsDetailed",
                 matches.size,
@@ -264,6 +281,16 @@ class LiveGrepDialog(
                 isOKActionEnabled = false
             }
         }
+        updatePreview()
+    }
+
+    private fun showGrepPrompt() {
+        cachedRgMatches = emptyList()
+        visibleMatches = emptyList()
+        resultModel.replaceAll(emptyList())
+        candidateListPanel.showInitialEmptyText()
+        statusLabel.text = MyBundle.message("dialog.grep.status.ready")
+        isOKActionEnabled = false
         updatePreview()
     }
 
