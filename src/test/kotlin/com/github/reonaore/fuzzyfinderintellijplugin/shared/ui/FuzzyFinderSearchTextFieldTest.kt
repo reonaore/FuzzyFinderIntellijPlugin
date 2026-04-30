@@ -1,4 +1,4 @@
-package com.github.reonaore.fuzzyfinderintellijplugin.ui
+package com.github.reonaore.fuzzyfinderintellijplugin.shared.ui
 
 import junit.framework.TestCase.assertEquals
 import org.junit.Test

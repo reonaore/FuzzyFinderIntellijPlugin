@@ -1,4 +1,4 @@
-package com.github.reonaore.fuzzyfinderintellijplugin.actions
+package com.github.reonaore.fuzzyfinderintellijplugin.livegrep
 
 import junit.framework.TestCase.assertEquals
 import org.junit.Test

@@ -1,4 +1,4 @@
-package com.github.reonaore.fuzzyfinderintellijplugin.ui
+package com.github.reonaore.fuzzyfinderintellijplugin.filefinder
 
 import junit.framework.TestCase.assertEquals
 import junit.framework.TestCase.assertFalse

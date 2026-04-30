@@ -1,7 +1,11 @@
-package com.github.reonaore.fuzzyfinderintellijplugin.ui
+package com.github.reonaore.fuzzyfinderintellijplugin.livegrep
 
+import com.github.reonaore.fuzzyfinderintellijplugin.filefinder.fileIcon
+import com.github.reonaore.fuzzyfinderintellijplugin.filefinder.relativeParentPath
+import com.github.reonaore.fuzzyfinderintellijplugin.filefinder.relativePathFrom
 import com.github.reonaore.fuzzyfinderintellijplugin.services.GrepMatch
 import com.github.reonaore.fuzzyfinderintellijplugin.services.TextRange
+import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.HighlightedTextComponent
 import com.intellij.ui.CollectionListModel
 import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.components.JBList

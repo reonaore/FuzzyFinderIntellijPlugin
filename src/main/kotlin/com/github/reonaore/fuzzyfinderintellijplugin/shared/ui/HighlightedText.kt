@@ -1,4 +1,4 @@
-package com.github.reonaore.fuzzyfinderintellijplugin.ui
+package com.github.reonaore.fuzzyfinderintellijplugin.shared.ui
 
 import com.github.reonaore.fuzzyfinderintellijplugin.services.TextRange
 import com.intellij.ui.SimpleTextAttributes

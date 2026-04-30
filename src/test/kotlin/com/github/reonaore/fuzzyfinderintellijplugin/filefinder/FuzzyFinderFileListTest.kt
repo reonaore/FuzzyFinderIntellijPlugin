@@ -1,6 +1,7 @@
-package com.github.reonaore.fuzzyfinderintellijplugin.ui
+package com.github.reonaore.fuzzyfinderintellijplugin.filefinder
 
 import com.github.reonaore.fuzzyfinderintellijplugin.services.TextRange
+import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.contiguousHighlightRanges
 import junit.framework.TestCase.assertEquals
 import junit.framework.TestCase.assertNull
 import org.junit.Test

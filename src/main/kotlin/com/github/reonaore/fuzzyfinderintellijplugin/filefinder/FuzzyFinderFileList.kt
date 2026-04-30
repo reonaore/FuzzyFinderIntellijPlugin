@@ -1,5 +1,7 @@
-package com.github.reonaore.fuzzyfinderintellijplugin.ui
+package com.github.reonaore.fuzzyfinderintellijplugin.filefinder
 
+import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.HighlightedTextComponent
+import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.contiguousHighlightRanges
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.ui.CollectionListModel
