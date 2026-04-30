@@ -8,13 +8,11 @@ import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.project.Project
-import kotlinx.coroutines.CoroutineScope
 import java.nio.file.Path
 
 @Service(Service.Level.PROJECT)
 class FuzzyFinderService(
     private val project: Project,
-    private val cs: CoroutineScope,
 ) : Disposable {
 
     private val settingsService: FuzzyFinderSettingsService

@@ -118,6 +118,7 @@ private data class RgJsonLine(
 )
 
 @Serializable
+@Suppress("unused")
 private enum class RgMessageType {
     @SerialName("begin")
     BEGIN,

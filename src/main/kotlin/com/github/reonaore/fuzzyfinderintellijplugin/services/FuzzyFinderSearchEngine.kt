@@ -111,15 +111,15 @@ class FuzzyFinderSearchEngine(
             matches.forEachIndexed { index, match ->
                 append(index)
                 append('\t')
-                append(match.displayText(root))
+                append(grepMatchDisplayText(match, root))
                 append('\u0000')
             }
         }.toByteArray(StandardCharsets.UTF_8)
     }
 
-    private fun GrepMatch.displayText(root: Path): String {
-        val displayPath = runCatching { root.relativize(path).toString() }.getOrDefault(path.toString())
-        return "$displayPath:$line:$column: $lineText"
+    private fun grepMatchDisplayText(match: GrepMatch, root: Path): String {
+        val displayPath = runCatching { root.relativize(match.path).toString() }.getOrDefault(match.path.toString())
+        return "$displayPath:${match.line}:${match.column}: ${match.lineText}"
     }
 
     private fun parseFilteredGrepMatchIndexes(stdout: ByteArray): List<Int> {

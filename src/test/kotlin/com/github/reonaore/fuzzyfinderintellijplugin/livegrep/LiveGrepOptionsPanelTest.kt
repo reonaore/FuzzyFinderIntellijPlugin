@@ -41,7 +41,7 @@ class LiveGrepOptionsPanelTest {
 
         panel.setExtensionsText("kt")
 
-        assertEquals("kt", panel.extensionsText())
+        assertEquals(listOf("kt"), panel.currentOptions().includeExtensions)
         assertEquals(1, changes)
     }
 

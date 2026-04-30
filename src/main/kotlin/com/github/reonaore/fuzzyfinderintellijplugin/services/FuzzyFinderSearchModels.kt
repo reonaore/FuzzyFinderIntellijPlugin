@@ -52,7 +52,7 @@ data class GrepSearchOptions(
     val smartCase: Boolean = true,
 )
 
-enum class FdEntryType(val presentableName: String, val fdValue: String?) {
+enum class FdEntryType(private val presentableName: String, val fdValue: String?) {
     ANY("Any", null),
     FILES("Files", "f"),
     DIRECTORIES("Directories", "d"),

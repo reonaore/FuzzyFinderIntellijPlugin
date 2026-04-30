@@ -21,7 +21,7 @@ import java.awt.Font
 class FuzzyFinderPreview(
     private val project: Project,
 ) {
-    val document = EditorFactory.getInstance().createDocument(MyBundle.message("dialog.preview.empty"))
+    private val document = EditorFactory.getInstance().createDocument(MyBundle.message("dialog.preview.empty"))
     private val previewHighlighters = mutableListOf<RangeHighlighter>()
     val editor = (EditorFactory.getInstance().createViewer(document, project) as EditorEx).apply {
         settings.apply {
@@ -112,10 +112,10 @@ internal fun previewHighlightTextOffsets(text: String, highlightRanges: List<Pre
 
 private fun lineStartOffsets(text: String): List<Int> {
     val offsets = mutableListOf(0)
-    text.forEachIndexed { index, char ->
-        if (char == '\n' && index + 1 < text.length) {
-            offsets += index + 1
-        }
+    var newlineIndex = text.indexOf('\n')
+    while (newlineIndex >= 0 && newlineIndex + 1 < text.length) {
+        offsets += newlineIndex + 1
+        newlineIndex = text.indexOf('\n', newlineIndex + 1)
     }
     return offsets
 }

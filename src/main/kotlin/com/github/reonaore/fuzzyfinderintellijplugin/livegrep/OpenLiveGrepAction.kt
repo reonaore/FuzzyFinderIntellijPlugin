@@ -13,7 +13,7 @@ class OpenLiveGrepAction : DumbAwareAction() {
     override fun update(e: AnActionEvent) {
         e.presentation.text = MyBundle.message("action.openLiveGrep.text")
         e.presentation.description = MyBundle.message("action.openLiveGrep.description")
-        e.presentation.isEnabled = e.project != null
+        e.presentation.isEnabled = CommonDataKeys.PROJECT.getData(e.dataContext) != null
     }
 
     override fun actionPerformed(e: AnActionEvent) {
