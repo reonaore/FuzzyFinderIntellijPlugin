@@ -4,6 +4,20 @@
 
 ## [Unreleased]
 
+### Added
+
+- Live Grep option controls now expose keyboard shortcuts for faster filtering.
+
+### Changed
+
+- Finder and Live Grep dialogs now use Flow-based ViewModels for more predictable UI state handling.
+- Finder and Live Grep result panes now show clearer loading and empty candidate states.
+- Gradle wrapper and internal package structure have been updated.
+
+### Fixed
+
+- Qodana warnings have been resolved without changing the plugin behavior.
+
 ## [0.3.0] - 2026-04-28
 
 ### Added
