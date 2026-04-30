@@ -15,7 +15,7 @@ class FuzzyFinderOptionsPanelTest {
     @Test
     fun togglingIncludeHiddenUpdatesSearchOptionsAndNotifiesListener() {
         var changes = 0
-        val panel = FuzzyFinderOptionsPanel { changes++ }
+        val panel = FuzzyFinderOptionsPanel().apply { onOptionsChanged { changes++ } }
 
         assertFalse(panel.currentOptions().includeHidden)
 
@@ -28,7 +28,7 @@ class FuzzyFinderOptionsPanelTest {
     @Test
     fun togglingFollowSymlinksUpdatesSearchOptionsAndNotifiesListener() {
         var changes = 0
-        val panel = FuzzyFinderOptionsPanel { changes++ }
+        val panel = FuzzyFinderOptionsPanel().apply { onOptionsChanged { changes++ } }
 
         assertTrue(panel.currentOptions().followSymlinks)
 
@@ -41,7 +41,7 @@ class FuzzyFinderOptionsPanelTest {
     @Test
     fun togglingRespectGitIgnoreUpdatesSearchOptionsAndNotifiesListener() {
         var changes = 0
-        val panel = FuzzyFinderOptionsPanel { changes++ }
+        val panel = FuzzyFinderOptionsPanel().apply { onOptionsChanged { changes++ } }
 
         assertTrue(panel.currentOptions().respectGitIgnore)
 
@@ -53,7 +53,7 @@ class FuzzyFinderOptionsPanelTest {
 
     @Test
     fun parsesCommaSeparatedExtensionFilters() {
-        val panel = FuzzyFinderOptionsPanel { }
+        val panel = FuzzyFinderOptionsPanel()
 
         panel.setExtensionsText(" kt, .java,  ,md ")
 
@@ -63,7 +63,7 @@ class FuzzyFinderOptionsPanelTest {
     @Test
     fun notifiesWhenExtensionFiltersChange() {
         var changes = 0
-        val panel = FuzzyFinderOptionsPanel { changes++ }
+        val panel = FuzzyFinderOptionsPanel().apply { onOptionsChanged { changes++ } }
 
         panel.setExtensionsText("kt")
 
@@ -73,7 +73,7 @@ class FuzzyFinderOptionsPanelTest {
 
     @Test
     fun parsesCommaSeparatedExcludeFilters() {
-        val panel = FuzzyFinderOptionsPanel { }
+        val panel = FuzzyFinderOptionsPanel()
 
         panel.setExcludeText(" build, out,  ,target ")
 
@@ -83,7 +83,7 @@ class FuzzyFinderOptionsPanelTest {
     @Test
     fun notifiesWhenExcludeFiltersChange() {
         var changes = 0
-        val panel = FuzzyFinderOptionsPanel { changes++ }
+        val panel = FuzzyFinderOptionsPanel().apply { onOptionsChanged { changes++ } }
 
         panel.setExcludeText("build")
 
@@ -93,14 +93,14 @@ class FuzzyFinderOptionsPanelTest {
 
     @Test
     fun excludeFilterFieldIsEditable() {
-        val panel = FuzzyFinderOptionsPanel { }
+        val panel = FuzzyFinderOptionsPanel()
 
         assertTrue(panel.excludeFieldIsEditable())
     }
 
     @Test
     fun checkboxLabelsUnderlineTheShortcutCharacter() {
-        val panel = FuzzyFinderOptionsPanel { }
+        val panel = FuzzyFinderOptionsPanel()
 
         assertEquals("<html><u>H</u>idden</html>", panel.includeHiddenLabelText())
         assertEquals("<html>Follow <u>s</u>ymlinks</html>", panel.followSymlinksLabelText())
@@ -109,7 +109,7 @@ class FuzzyFinderOptionsPanelTest {
 
     @Test
     fun filterLabelsUnderlineTheShortcutCharacter() {
-        val panel = FuzzyFinderOptionsPanel { }
+        val panel = FuzzyFinderOptionsPanel()
 
         assertEquals("<html><u>E</u>xtensions</html>", panel.extensionsLabelText())
         assertEquals("<html>E<u>x</u>clude</html>", panel.excludeLabelText())
@@ -117,7 +117,7 @@ class FuzzyFinderOptionsPanelTest {
 
     @Test
     fun checkboxTooltipsShowExplicitAltShortcut() {
-        val panel = FuzzyFinderOptionsPanel { }
+        val panel = FuzzyFinderOptionsPanel()
 
         assertNotNull(panel.includeHiddenTooltipText())
         assertEquals("Alt+H", panel.includeHiddenTooltipText())
@@ -127,7 +127,7 @@ class FuzzyFinderOptionsPanelTest {
 
     @Test
     fun filterLabelsFocusTheirFieldsWithAltShortcuts() {
-        val panel = FuzzyFinderOptionsPanel { }
+        val panel = FuzzyFinderOptionsPanel()
 
         assertEquals(KeyEvent.VK_E, panel.extensionsLabelMnemonic())
         assertSame(panel.extensionsFieldComponent(), panel.extensionsLabelTarget())
@@ -139,7 +139,7 @@ class FuzzyFinderOptionsPanelTest {
 
     @Test
     fun placesFilterFieldsAboveScopeOptions() {
-        val panel = FuzzyFinderOptionsPanel { }
+        val panel = FuzzyFinderOptionsPanel()
         val component = panel.component() as JPanel
         val layout = component.layout as GridBagLayout
 

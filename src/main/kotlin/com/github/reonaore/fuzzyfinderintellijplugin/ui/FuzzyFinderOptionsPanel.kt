@@ -14,9 +14,8 @@ import javax.swing.JComponent
 import javax.swing.JLabel
 import javax.swing.JPanel
 
-class FuzzyFinderOptionsPanel(
-    private val onOptionsChanged: () -> Unit,
-) {
+class FuzzyFinderOptionsPanel {
+    private var onOptionsChanged: () -> Unit = {}
     private val typeComboBox = JComboBox(FdEntryType.entries.toTypedArray())
     private val includeHiddenCheckBox = JCheckBox(mnemonicLabel("Hidden", 'H'))
     private val followSymlinksCheckBox = JCheckBox(mnemonicLabel("Follow symlinks", 's'))
@@ -59,6 +58,10 @@ class FuzzyFinderOptionsPanel(
                 onOptionsChanged()
             }
         })
+    }
+
+    fun onOptionsChanged(onOptionsChanged: () -> Unit) {
+        this.onOptionsChanged = onOptionsChanged
     }
 
     fun component(): JComponent {
