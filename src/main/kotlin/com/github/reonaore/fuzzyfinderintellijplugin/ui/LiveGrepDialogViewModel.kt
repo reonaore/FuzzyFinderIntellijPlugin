@@ -2,7 +2,6 @@ package com.github.reonaore.fuzzyfinderintellijplugin.ui
 
 import com.github.reonaore.fuzzyfinderintellijplugin.MyBundle
 import com.github.reonaore.fuzzyfinderintellijplugin.services.FuzzyFinderException
-import com.github.reonaore.fuzzyfinderintellijplugin.services.FuzzyFinderService
 import com.github.reonaore.fuzzyfinderintellijplugin.services.GrepMatch
 import com.github.reonaore.fuzzyfinderintellijplugin.services.GrepSearchOptions
 import com.github.reonaore.fuzzyfinderintellijplugin.services.GrepSearchResult
@@ -30,26 +29,20 @@ data class LiveGrepDialogState(
     val statusText: String = MyBundle.message("dialog.grep.status.ready"),
 )
 
+internal interface LiveGrepSearchBackend {
+    suspend fun grep(query: String, options: GrepSearchOptions): GrepSearchResult
+
+    suspend fun filterMatches(query: String, matches: List<GrepMatch>): List<GrepMatch>
+
+    fun notifyError(message: String)
+}
+
 @OptIn(FlowPreview::class)
 class LiveGrepDialogViewModel internal constructor(
+    private val backend: LiveGrepSearchBackend,
     scope: CoroutineScope,
     initialOptions: GrepSearchOptions,
-    private val runGrep: suspend (String, GrepSearchOptions) -> GrepSearchResult,
-    private val filterMatches: suspend (String, List<GrepMatch>) -> List<GrepMatch>,
-    private val notifyError: (String) -> Unit,
 ) {
-    constructor(
-        service: FuzzyFinderService,
-        scope: CoroutineScope,
-        initialOptions: GrepSearchOptions,
-    ) : this(
-        scope = scope,
-        initialOptions = initialOptions,
-        runGrep = { query, options -> service.grep(query, options, limit = Int.MAX_VALUE) },
-        filterMatches = service::filterGrepMatches,
-        notifyError = service::notifyError,
-    )
-
     private val rgQuery = MutableStateFlow("")
     private val fzfQuery = MutableStateFlow("")
     private val options = MutableStateFlow(initialOptions)
@@ -127,7 +120,7 @@ class LiveGrepDialogViewModel internal constructor(
         showSearching(request)
         try {
             isGrepSearching = true
-            val result = runGrep(request.rgQuery, request.options)
+            val result = backend.grep(request.rgQuery, request.options)
             cachedRgMatches = result.matches
             cachedRgTotalMatches = result.totalMatches
             cachedRgQuery = request.rgQuery
@@ -187,7 +180,7 @@ class LiveGrepDialogViewModel internal constructor(
         return if (query.isBlank()) {
             cachedRgMatches.take(MAX_RESULTS)
         } else {
-            filterMatches(query, cachedRgMatches)
+            backend.filterMatches(query, cachedRgMatches)
         }
     }
 
@@ -236,7 +229,7 @@ class LiveGrepDialogViewModel internal constructor(
             is FuzzyFinderException -> error.message
             else -> error.localizedMessage
         } ?: MyBundle.message("dialog.status.error")
-        notifyError(message)
+        backend.notifyError(message)
     }
 
     private data class LiveGrepSearchRequest(

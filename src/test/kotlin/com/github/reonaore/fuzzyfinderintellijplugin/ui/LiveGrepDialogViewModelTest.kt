@@ -26,25 +26,25 @@ class LiveGrepDialogViewModelTest {
         val firstSearchStarted = CompletableDeferred<Unit>()
         val firstSearchCanceled = CompletableDeferred<Unit>()
         val viewModel = LiveGrepDialogViewModel(
+            backend = TestLiveGrepSearchBackend(
+                runGrep = { query, _ ->
+                    if (query == "f") {
+                        firstSearchStarted.complete(Unit)
+                        try {
+                            awaitCancellation()
+                        } finally {
+                            firstSearchCanceled.complete(Unit)
+                        }
+                    }
+                    GrepSearchResult(
+                        totalMatches = 1,
+                        query = query,
+                        matches = listOf(grepMatch("/tmp/$query.txt", query)),
+                    )
+                },
+            ),
             scope = scope,
             initialOptions = GrepSearchOptions(),
-            runGrep = { query, _ ->
-                if (query == "f") {
-                    firstSearchStarted.complete(Unit)
-                    try {
-                        awaitCancellation()
-                    } finally {
-                        firstSearchCanceled.complete(Unit)
-                    }
-                }
-                GrepSearchResult(
-                    totalMatches = 1,
-                    query = query,
-                    matches = listOf(grepMatch("/tmp/$query.txt", query)),
-                )
-            },
-            filterMatches = { _, matches -> matches },
-            notifyError = {},
         )
 
         viewModel.onRgQueryChanged("f")
@@ -68,19 +68,20 @@ class LiveGrepDialogViewModelTest {
             grepMatch("/tmp/Other.kt", "other"),
         )
         val viewModel = LiveGrepDialogViewModel(
+            backend = TestLiveGrepSearchBackend(
+                runGrep = { query, _ ->
+                    GrepSearchResult(
+                        totalMatches = sourceMatches.size,
+                        query = query,
+                        matches = sourceMatches,
+                    )
+                },
+                filterMatchesAction = { query, matches ->
+                    matches.filter { it.lineText.contains(query) }
+                },
+            ),
             scope = CoroutineScope(Job() + Dispatchers.Default),
             initialOptions = GrepSearchOptions(),
-            runGrep = { query, _ ->
-                GrepSearchResult(
-                    totalMatches = sourceMatches.size,
-                    query = query,
-                    matches = sourceMatches,
-                )
-            },
-            filterMatches = { query, matches ->
-                matches.filter { it.lineText.contains(query) }
-            },
-            notifyError = {},
         )
 
         viewModel.onRgQueryChanged("needle")
@@ -108,19 +109,20 @@ class LiveGrepDialogViewModelTest {
         val grepResult = CompletableDeferred<GrepSearchResult>()
         val grepFinished = CompletableDeferred<Unit>()
         val viewModel = LiveGrepDialogViewModel(
+            backend = TestLiveGrepSearchBackend(
+                runGrep = { _, _ ->
+                    try {
+                        grepResult.await()
+                    } finally {
+                        grepFinished.complete(Unit)
+                    }
+                },
+                filterMatchesAction = { query, matches ->
+                    matches.filter { it.lineText.contains(query) }
+                },
+            ),
             scope = CoroutineScope(Job() + Dispatchers.Default),
             initialOptions = GrepSearchOptions(),
-            runGrep = { query, _ ->
-                try {
-                    grepResult.await()
-                } finally {
-                    grepFinished.complete(Unit)
-                }
-            },
-            filterMatches = { query, matches ->
-                matches.filter { it.lineText.contains(query) }
-            },
-            notifyError = {},
         )
 
         viewModel.onRgQueryChanged("needle")
@@ -153,11 +155,12 @@ class LiveGrepDialogViewModelTest {
     fun marksStateAsErrorWhenGrepFails() = runBlocking {
         val notifications = mutableListOf<String>()
         val viewModel = LiveGrepDialogViewModel(
+            backend = TestLiveGrepSearchBackend(
+                runGrep = { _, _ -> throw FuzzyFinderException("rg failed") },
+                notifyErrorAction = notifications::add,
+            ),
             scope = CoroutineScope(Job() + Dispatchers.Default),
             initialOptions = GrepSearchOptions(),
-            runGrep = { _, _ -> throw FuzzyFinderException("rg failed") },
-            filterMatches = { _, matches -> matches },
-            notifyError = notifications::add,
         )
 
         viewModel.onRgQueryChanged("query")
@@ -186,6 +189,30 @@ class LiveGrepDialogViewModelTest {
             lineText = lineText,
             matchRanges = listOf(TextRange(0, lineText.length)),
         )
+    }
+
+    private class TestLiveGrepSearchBackend(
+        private val runGrep: suspend (String, GrepSearchOptions) -> GrepSearchResult = { query, _ ->
+            GrepSearchResult(
+                totalMatches = 0,
+                query = query,
+                matches = emptyList(),
+            )
+        },
+        private val filterMatchesAction: suspend (String, List<GrepMatch>) -> List<GrepMatch> = { _, matches -> matches },
+        private val notifyErrorAction: (String) -> Unit = {},
+    ) : LiveGrepSearchBackend {
+        override suspend fun grep(query: String, options: GrepSearchOptions): GrepSearchResult {
+            return runGrep(query, options)
+        }
+
+        override suspend fun filterMatches(query: String, matches: List<GrepMatch>): List<GrepMatch> {
+            return filterMatchesAction(query, matches)
+        }
+
+        override fun notifyError(message: String) {
+            notifyErrorAction(message)
+        }
     }
 
     private companion object {
