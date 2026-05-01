@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-05-01
+
 ### Added
 
 - Live Grep option controls now expose keyboard shortcuts for faster filtering.
@@ -73,7 +75,8 @@
 - Preview loading now runs off the EDT and ignores stale selection updates
 - User-visible strings are centralized in the resource bundle
 
-[Unreleased]: https://github.com/reonaore/FuzzyFinderIntellijPlugin/compare/0.3.0...HEAD
+[Unreleased]: https://github.com/reonaore/FuzzyFinderIntellijPlugin/compare/0.3.1...HEAD
+[0.3.1]: https://github.com/reonaore/FuzzyFinderIntellijPlugin/compare/0.3.0...0.3.1
 [0.3.0]: https://github.com/reonaore/FuzzyFinderIntellijPlugin/compare/0.2.2...0.3.0
 [0.2.2]: https://github.com/reonaore/FuzzyFinderIntellijPlugin/compare/0.2.1...0.2.2
 [0.2.1]: https://github.com/reonaore/FuzzyFinderIntellijPlugin/compare/0.2.0...0.2.1
