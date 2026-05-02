@@ -25,9 +25,17 @@ data class FuzzyFinderDialogState(
     val hasError: Boolean = false,
     val hasSearched: Boolean = false,
     val paths: List<Path> = emptyList(),
+    val selectedIndex: Int = NO_SELECTION,
+    val selectedPath: Path? = null,
+    val canOpenSelectedFile: Boolean = false,
+    val previewPath: Path? = null,
     val totalCandidates: Int = 0,
     val statusText: String = MyBundle.message("dialog.status.loading"),
-)
+) {
+    companion object {
+        const val NO_SELECTION = -1
+    }
+}
 
 @OptIn(FlowPreview::class)
 class FuzzyFinderDialogViewModel internal constructor(
@@ -69,11 +77,32 @@ class FuzzyFinderDialogViewModel internal constructor(
     }
 
     fun onQueryChanged(newQuery: String) {
+        onUpdateQuery(newQuery)
+    }
+
+    fun onUpdateQuery(newQuery: String) {
         query.value = newQuery
     }
 
     fun onOptionsChanged(newOptions: FdSearchOptions) {
+        onUpdateOptions(newOptions)
+    }
+
+    fun onUpdateOptions(newOptions: FdSearchOptions) {
         options.value = newOptions
+    }
+
+    fun onSelectCandidate(index: Int) {
+        selectCandidate(index)
+    }
+
+    fun onSelectNextCandidate() {
+        selectCandidate(_state.value.selectedIndex + 1)
+    }
+
+    fun onSelectPreviousCandidate() {
+        val currentIndex = _state.value.selectedIndex.takeIf { it >= 0 } ?: 0
+        selectCandidate(currentIndex - 1)
     }
 
     private suspend fun search(query: String, options: FdSearchOptions) {
@@ -96,6 +125,12 @@ class FuzzyFinderDialogViewModel internal constructor(
                 isSearching = false,
                 hasError = true,
                 hasSearched = true,
+                paths = emptyList(),
+                selectedIndex = FuzzyFinderDialogState.NO_SELECTION,
+                selectedPath = null,
+                canOpenSelectedFile = false,
+                previewPath = null,
+                totalCandidates = 0,
                 statusText = MyBundle.message("dialog.status.error"),
             )
             val message = when (e) {
@@ -107,6 +142,7 @@ class FuzzyFinderDialogViewModel internal constructor(
     }
 
     private fun applySearchResult(query: String, options: FdSearchOptions, searchResult: SearchResult) {
+        val selectedPath = searchResult.results.firstOrNull()
         _state.value = _state.value.copy(
             query = query,
             options = options,
@@ -114,12 +150,42 @@ class FuzzyFinderDialogViewModel internal constructor(
             hasError = false,
             hasSearched = true,
             paths = searchResult.results,
+            selectedIndex = if (selectedPath == null) {
+                FuzzyFinderDialogState.NO_SELECTION
+            } else {
+                0
+            },
+            selectedPath = selectedPath,
+            canOpenSelectedFile = selectedPath != null,
+            previewPath = selectedPath,
             totalCandidates = searchResult.totalCandidates,
             statusText = MyBundle.message(
                 "dialog.status.resultsDetailed",
                 searchResult.results.size,
                 searchResult.totalCandidates,
             ),
+        )
+    }
+
+    private fun selectCandidate(index: Int) {
+        val paths = _state.value.paths
+        if (paths.isEmpty()) {
+            _state.value = _state.value.copy(
+                selectedIndex = FuzzyFinderDialogState.NO_SELECTION,
+                selectedPath = null,
+                canOpenSelectedFile = false,
+                previewPath = null,
+            )
+            return
+        }
+
+        val nextIndex = index.coerceIn(0, paths.lastIndex)
+        val selectedPath = paths[nextIndex]
+        _state.value = _state.value.copy(
+            selectedIndex = nextIndex,
+            selectedPath = selectedPath,
+            canOpenSelectedFile = true,
+            previewPath = selectedPath,
         )
     }
 
