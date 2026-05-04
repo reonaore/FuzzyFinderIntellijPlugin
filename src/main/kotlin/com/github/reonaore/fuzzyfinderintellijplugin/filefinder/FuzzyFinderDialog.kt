@@ -4,7 +4,6 @@ import com.github.reonaore.fuzzyfinderintellijplugin.MyBundle
 import com.github.reonaore.fuzzyfinderintellijplugin.services.FuzzyFinderService
 import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.CandidateListLoadingPanel
 import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.FuzzyFinderPreview
-import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.FuzzyFinderPreviewLoader
 import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.PreviewContent
 import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.contiguousHighlightRanges
 import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.fuzzyFinderSearchTextField
@@ -25,7 +24,6 @@ import com.intellij.ui.ScrollPaneFactory
 import com.intellij.ui.components.JBLabel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
@@ -47,7 +45,6 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
 
     private val service = project.service<FuzzyFinderService>()
     private val optionsPanel = FuzzyFinderOptionsPanel()
-    private val previewLoader = FuzzyFinderPreviewLoader()
     private val statusLabel = JBLabel(MyBundle.message("dialog.status.loading"))
     private val resultModel = CollectionListModel<FileListItem>()
     private val resultList = fuzzyFinderFileList(
@@ -64,9 +61,7 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
     )
     private val preview = FuzzyFinderPreview(project)
     private val dialogScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    private var previewJob: Job? = null
-    private var renderedPreviewPath: Path? = null
-    private var hasRenderedPreview = false
+    private var renderedPreviewContent: PreviewContent? = null
     private var isRenderingState = false
     private val searchField = fuzzyFinderSearchTextField(placeHolderText = "Search")
     private val viewModel = FuzzyFinderDialogViewModel(service, dialogScope, optionsPanel.currentOptions())
@@ -147,6 +142,7 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
                 withContext(Dispatchers.EDT) {
                     render(state)
                 }
+                renderPreview(state.preview.content)
             }
         }
     }
@@ -166,7 +162,6 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
         } finally {
             isRenderingState = false
         }
-        renderPreview(state.previewPath)
     }
 
     private fun renderCandidateListState(state: FuzzyFinderDialogState, items: List<FileListItem>) {
@@ -188,21 +183,11 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
         }
     }
 
-    private fun renderPreview(previewPath: Path?) {
-        if (hasRenderedPreview && renderedPreviewPath == previewPath) return
+    private suspend fun renderPreview(previewContent: PreviewContent) {
+        if (renderedPreviewContent == previewContent) return
 
-        hasRenderedPreview = true
-        renderedPreviewPath = previewPath
-        previewJob?.cancel()
-        previewJob = dialogScope.launch(dialogModalityContext()) {
-            if (previewPath == null) {
-                preview.show(PreviewContent.empty)
-                return@launch
-            }
-
-            val previewContent = previewLoader.load(previewPath)
-            preview.show(previewContent)
-        }
+        renderedPreviewContent = previewContent
+        preview.show(previewContent)
     }
 
     private fun onCandidateSelected(event: ListSelectionEvent) {

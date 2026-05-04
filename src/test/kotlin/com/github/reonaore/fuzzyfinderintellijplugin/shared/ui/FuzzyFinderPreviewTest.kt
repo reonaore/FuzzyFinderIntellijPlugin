@@ -44,4 +44,14 @@ class FuzzyFinderPreviewTest {
 
         assertEquals(listOf(TextRange(0, 6)), offsets)
     }
+
+    @Test
+    fun normalizesPreviewTextLineSeparatorsForEditorDocuments() {
+        val text = "@rem\r\n@rem Copyright\r\n\r\nset APP_HOME=%DIRNAME%"
+
+        assertEquals(
+            "@rem\n@rem Copyright\n\nset APP_HOME=%DIRNAME%",
+            normalizePreviewTextForEditor(text),
+        )
+    }
 }
