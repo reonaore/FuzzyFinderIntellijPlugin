@@ -347,6 +347,11 @@ class LiveGrepDialogViewModel internal constructor(
     }
 
     private fun selectMatchAt(index: Int, match: GrepMatch) {
+        val currentState = _state.value
+        if (currentState.selectedMatchIndex == index && currentState.selectedMatch == match) {
+            return
+        }
+
         _state.value = _state.value.copy(
             selectedMatchIndex = index,
             selectedMatch = match,

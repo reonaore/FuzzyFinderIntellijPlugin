@@ -21,6 +21,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.nio.file.Path
+import java.util.concurrent.atomic.AtomicInteger
 
 class LiveGrepDialogViewModelTest {
     @Test
@@ -242,6 +243,32 @@ class LiveGrepDialogViewModelTest {
         viewModel.onSelectNextMatch()
         assertEquals(1, viewModel.state.value.selectedMatchIndex)
         assertEquals(secondMatch, viewModel.state.value.selectedMatch)
+    }
+
+    @Test
+    fun doesNotReloadPreviewWhenClampedSelectionIsUnchanged() = runBlocking {
+        val match = grepMatch("/tmp/App.kt", "needle")
+        val loadCount = AtomicInteger()
+        val viewModel = viewModelWithMatches(
+            match,
+            loadPreview = { path ->
+                loadCount.incrementAndGet()
+                PreviewContent(path.toString(), null)
+            },
+        )
+
+        viewModel.onUpdateRgQuery("needle")
+        withTimeout(TEST_TIMEOUT_MS) {
+            waitUntil { viewModel.state.value.preview is LiveGrepPreviewState.Ready }
+        }
+
+        viewModel.onSelectPreviousMatch()
+        viewModel.onSelectNextMatch()
+
+        assertEquals(0, viewModel.state.value.selectedMatchIndex)
+        assertEquals(match, viewModel.state.value.selectedMatch)
+        assertEquals(1, loadCount.get())
+        assertTrue(viewModel.state.value.preview is LiveGrepPreviewState.Ready)
     }
 
     @Test
