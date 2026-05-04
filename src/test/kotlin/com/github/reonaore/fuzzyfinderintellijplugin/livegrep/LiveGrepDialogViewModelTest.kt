@@ -52,12 +52,12 @@ class LiveGrepDialogViewModelTest {
             loadPreview = { path -> PreviewContent(path.toString(), null) },
         )
 
-        viewModel.onRgQueryChanged("f")
+        viewModel.onUpdateRgQuery("f")
         withTimeout(TEST_TIMEOUT_MS) {
             firstSearchStarted.await()
         }
 
-        viewModel.onRgQueryChanged("fo")
+        viewModel.onUpdateRgQuery("fo")
 
         withTimeout(TEST_TIMEOUT_MS) {
             firstSearchCanceled.await()
@@ -90,12 +90,12 @@ class LiveGrepDialogViewModelTest {
             loadPreview = { path -> PreviewContent(path.toString(), null) },
         )
 
-        viewModel.onRgQueryChanged("needle")
+        viewModel.onUpdateRgQuery("needle")
         withTimeout(TEST_TIMEOUT_MS) {
             waitUntil { viewModel.state.value.matches == sourceMatches }
         }
 
-        viewModel.onFzfQueryChanged("other")
+        viewModel.onUpdateFzfQuery("other")
 
         withTimeout(TEST_TIMEOUT_MS) {
             waitUntil {
@@ -132,12 +132,12 @@ class LiveGrepDialogViewModelTest {
             loadPreview = { path -> PreviewContent(path.toString(), null) },
         )
 
-        viewModel.onRgQueryChanged("needle")
+        viewModel.onUpdateRgQuery("needle")
         withTimeout(TEST_TIMEOUT_MS) {
             waitUntil { viewModel.state.value.rgQuery == "needle" && viewModel.state.value.isSearching }
         }
 
-        viewModel.onFzfQueryChanged("other")
+        viewModel.onUpdateFzfQuery("other")
         delay(SEARCH_DEBOUNCE_WAIT_MS)
 
         assertFalse(grepFinished.isCompleted)
@@ -171,7 +171,7 @@ class LiveGrepDialogViewModelTest {
             loadPreview = { path -> PreviewContent(path.toString(), null) },
         )
 
-        viewModel.onRgQueryChanged("query")
+        viewModel.onUpdateRgQuery("query")
 
         withTimeout(TEST_TIMEOUT_MS) {
             waitUntil { viewModel.state.value.hasError }

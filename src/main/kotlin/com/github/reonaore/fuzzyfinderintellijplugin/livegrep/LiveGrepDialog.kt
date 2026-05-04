@@ -188,7 +188,7 @@ class LiveGrepDialog(
             renderCandidateListState(state, items)
             statusLabel.text = state.statusText
             isOKActionEnabled = state.canOpenSelectedMatch
-            renderSelectedIndex(items.selectedListIndexFor(state.selectedMatch))
+            renderSelectedIndex(selectedListIndexFor(items, state.selectedMatch))
         } finally {
             isRenderingState = false
         }
@@ -302,11 +302,11 @@ class LiveGrepDialog(
     }
 }
 
-private fun List<GrepListItem>.selectedListIndexFor(selectedMatch: GrepMatch?): Int {
+private fun selectedListIndexFor(items: List<GrepListItem>, selectedMatch: GrepMatch?): Int {
     if (selectedMatch == null) {
         return LiveGrepDialogState.NO_SELECTION
     }
-    return indexOfFirst { it.match == selectedMatch }
+    return items.indexOfFirst { it.match == selectedMatch }
 }
 
 private class FuzzyFinderLiveGrepSearchBackend(

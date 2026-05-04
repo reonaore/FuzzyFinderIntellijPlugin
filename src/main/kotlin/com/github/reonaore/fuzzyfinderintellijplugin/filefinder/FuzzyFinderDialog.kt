@@ -149,7 +149,7 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
 
     private fun render(state: FuzzyFinderDialogState) {
         val items = state.paths.map { path ->
-            path.toFileListItem(project.basePath, state.query)
+            toFileListItem(path, project.basePath, state.query)
         }
 
         isRenderingState = true
@@ -266,16 +266,16 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
     }
 }
 
-private fun Path.toFileListItem(basePath: String?, query: String): FileListItem {
-    val relativePath = this.relativePathFrom(basePath)
-    val fileName = this.fileName?.toString().orEmpty().ifBlank { relativePath }
-    val secondaryPath = this.relativeParentPath(basePath)
+private fun toFileListItem(path: Path, basePath: String?, query: String): FileListItem {
+    val relativePath = path.relativePathFrom(basePath)
+    val fileName = path.fileName?.toString().orEmpty().ifBlank { relativePath }
+    val secondaryPath = path.relativeParentPath(basePath)
 
     return FileListItem(
-        path = this,
+        path = path,
         fileName = fileName,
         secondaryPath = secondaryPath,
         highlightRanges = contiguousHighlightRanges(fuzzyMatchIndexes(fileName, query).toSet()),
-        icon = this.fileIcon(),
+        icon = path.fileIcon(),
     )
 }

@@ -103,16 +103,8 @@ class FuzzyFinderDialogViewModel internal constructor(
         }
     }
 
-    fun onQueryChanged(newQuery: String) {
-        onUpdateQuery(newQuery)
-    }
-
     fun onUpdateQuery(newQuery: String) {
         query.value = newQuery
-    }
-
-    fun onOptionsChanged(newOptions: FdSearchOptions) {
-        onUpdateOptions(newOptions)
     }
 
     fun onUpdateOptions(newOptions: FdSearchOptions) {
@@ -170,7 +162,30 @@ class FuzzyFinderDialogViewModel internal constructor(
     }
 
     private fun applySearchResult(query: String, options: FdSearchOptions, searchResult: SearchResult) {
-        val selectedPath = searchResult.results.firstOrNull()
+        if (searchResult.results.isEmpty()) {
+            _state.value = _state.value.copy(
+                query = query,
+                options = options,
+                isSearching = false,
+                hasError = false,
+                hasSearched = true,
+                paths = emptyList(),
+                selectedIndex = FuzzyFinderDialogState.NO_SELECTION,
+                selectedPath = null,
+                canOpenSelectedFile = false,
+                preview = FuzzyFinderPreviewState.Empty,
+                totalCandidates = searchResult.totalCandidates,
+                statusText = MyBundle.message(
+                    "dialog.status.resultsDetailed",
+                    0,
+                    searchResult.totalCandidates,
+                ),
+            )
+            loadSelectedPreview(null)
+            return
+        }
+
+        val selectedPath = searchResult.results.first()
         _state.value = _state.value.copy(
             query = query,
             options = options,
@@ -178,13 +193,9 @@ class FuzzyFinderDialogViewModel internal constructor(
             hasError = false,
             hasSearched = true,
             paths = searchResult.results,
-            selectedIndex = if (selectedPath == null) {
-                FuzzyFinderDialogState.NO_SELECTION
-            } else {
-                0
-            },
+            selectedIndex = 0,
             selectedPath = selectedPath,
-            canOpenSelectedFile = selectedPath != null,
+            canOpenSelectedFile = true,
             preview = previewStateFor(selectedPath),
             totalCandidates = searchResult.totalCandidates,
             statusText = MyBundle.message(

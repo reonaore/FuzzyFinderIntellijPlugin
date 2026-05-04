@@ -137,24 +137,12 @@ class LiveGrepDialogViewModel internal constructor(
         }
     }
 
-    fun onRgQueryChanged(newQuery: String) {
-        onUpdateRgQuery(newQuery)
-    }
-
     fun onUpdateRgQuery(newQuery: String) {
         rgQuery.value = newQuery
     }
 
-    fun onFzfQueryChanged(newQuery: String) {
-        onUpdateFzfQuery(newQuery)
-    }
-
     fun onUpdateFzfQuery(newQuery: String) {
         fzfQuery.value = newQuery
-    }
-
-    fun onOptionsChanged(newOptions: GrepSearchOptions) {
-        onUpdateOptions(newOptions)
     }
 
     fun onUpdateOptions(newOptions: GrepSearchOptions) {
@@ -267,7 +255,31 @@ class LiveGrepDialogViewModel internal constructor(
     }
 
     private fun applyFilteredResult(request: LiveGrepSearchRequest, matches: List<GrepMatch>) {
-        val selectedMatch = matches.firstOrNull()
+        if (matches.isEmpty()) {
+            _state.value = _state.value.copy(
+                rgQuery = request.rgQuery,
+                fzfQuery = request.fzfQuery,
+                options = request.options,
+                isSearching = false,
+                hasError = false,
+                hasSearched = true,
+                matches = emptyList(),
+                selectedMatchIndex = LiveGrepDialogState.NO_SELECTION,
+                selectedMatch = null,
+                canOpenSelectedMatch = false,
+                preview = LiveGrepPreviewState.Empty,
+                totalMatches = cachedRgTotalMatches,
+                statusText = MyBundle.message(
+                    "dialog.grep.status.resultsDetailed",
+                    0,
+                    cachedRgTotalMatches,
+                ),
+            )
+            loadSelectedPreview(null)
+            return
+        }
+
+        val selectedMatch = matches.first()
         _state.value = _state.value.copy(
             rgQuery = request.rgQuery,
             fzfQuery = request.fzfQuery,
@@ -276,13 +288,9 @@ class LiveGrepDialogViewModel internal constructor(
             hasError = false,
             hasSearched = true,
             matches = matches,
-            selectedMatchIndex = if (selectedMatch == null) {
-                LiveGrepDialogState.NO_SELECTION
-            } else {
-                0
-            },
+            selectedMatchIndex = 0,
             selectedMatch = selectedMatch,
-            canOpenSelectedMatch = selectedMatch != null,
+            canOpenSelectedMatch = true,
             preview = previewStateFor(selectedMatch),
             totalMatches = cachedRgTotalMatches,
             statusText = MyBundle.message(
