@@ -5,11 +5,8 @@ import com.github.reonaore.fuzzyfinderintellijplugin.services.FuzzyFinderService
 import com.github.reonaore.fuzzyfinderintellijplugin.services.GrepMatch
 import com.github.reonaore.fuzzyfinderintellijplugin.services.GrepSearchOptions
 import com.github.reonaore.fuzzyfinderintellijplugin.services.GrepSearchResult
-import com.github.reonaore.fuzzyfinderintellijplugin.services.PreviewHighlightRange
 import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.CandidateListLoadingPanel
 import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.FuzzyFinderPreview
-import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.FuzzyFinderPreviewLoader
-import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.PreviewContent
 import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.fuzzyFinderSearchTextField
 import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.onTextChanged
 import com.intellij.openapi.application.EDT
@@ -27,7 +24,6 @@ import com.intellij.ui.ScrollPaneFactory
 import com.intellij.ui.components.JBLabel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
@@ -52,12 +48,11 @@ class LiveGrepDialog(
 
     private val service = project.service<FuzzyFinderService>()
     private val optionsPanel = LiveGrepOptionsPanel()
-    private val previewLoader = FuzzyFinderPreviewLoader()
     private val statusLabel = JBLabel(MyBundle.message("dialog.grep.status.ready"))
     private val resultModel = CollectionListModel<GrepListItem>()
     private val resultList = liveGrepMatchList(
         resultModel,
-        this::updatePreview,
+        this::onCandidateSelected,
     ) { event ->
         if (event.clickCount == 2) {
             doOKAction()
@@ -70,8 +65,8 @@ class LiveGrepDialog(
     )
     private val preview = FuzzyFinderPreview(project)
     private val dialogScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    private var previewJob: Job? = null
-    private var visibleMatches: List<GrepMatch> = emptyList()
+    private var renderedPreviewState: LiveGrepPreviewState? = null
+    private var isRenderingState = false
     private val searchField = fuzzyFinderSearchTextField(placeHolderText = MyBundle.message("dialog.grep.search.placeholder"))
     private val fzfSearchField = fuzzyFinderSearchTextField(placeHolderText = MyBundle.message("dialog.grep.fuzzy.placeholder"))
     private val viewModel = LiveGrepDialogViewModel(
@@ -93,16 +88,16 @@ class LiveGrepDialog(
     private fun bind() {
         searchField.onTextChanged {
             clearFzfQuery()
-            viewModel.onRgQueryChanged(searchField.text)
+            viewModel.onUpdateRgQuery(searchField.text)
         }
         fzfSearchField.onTextChanged {
-            viewModel.onFzfQueryChanged(fzfSearchField.text)
+            viewModel.onUpdateFzfQuery(fzfSearchField.text)
         }
         optionsPanel.setOnOptionsChanged {
             clearFzfQuery()
-            viewModel.onOptionsChanged(optionsPanel.currentOptions())
+            viewModel.onUpdateOptions(optionsPanel.currentOptions())
         }
-        bindViewModel()
+        observeState()
     }
 
     override fun createCenterPanel(): JComponent {
@@ -154,7 +149,7 @@ class LiveGrepDialog(
     }
 
     override fun doOKAction() {
-        val match = resultList.selectedValue?.match ?: return
+        val match = viewModel.state.value.selectedMatch ?: return
         val virtualFile = LocalFileSystem.getInstance().findFileByNioFile(match.path) ?: return
         if (virtualFile.isDirectory) return
 
@@ -174,69 +169,67 @@ class LiveGrepDialog(
         fzfSearchField.text = ""
     }
 
-    private fun bindViewModel() {
+    private fun observeState() {
         dialogScope.launch(dialogModalityContext()) {
             viewModel.state.collectLatest { state ->
-                val items = state.matches.toGroupedGrepListItems(project.basePath)
                 withContext(Dispatchers.EDT) {
-                    visibleMatches = state.matches
-                    resultModel.replaceAll(items)
-                    if (state.isSearching) {
-                        candidateListPanel.showSearching(state.hasSearched)
-                    } else if (state.hasError) {
-                        candidateListPanel.showError()
-                    } else if (state.hasSearched) {
-                        candidateListPanel.showResults(items.isNotEmpty())
-                    } else {
-                        candidateListPanel.showInitialEmptyText()
-                    }
-                    statusLabel.text = state.statusText
-                    val firstMatchIndex = firstMatchIndex(items)
-                    if (firstMatchIndex >= 0) {
-                        resultList.selectedIndex = firstMatchIndex
-                    } else {
-                        isOKActionEnabled = false
-                    }
+                    render(state)
                 }
-                updatePreview()
+                renderPreview(state.preview)
             }
         }
     }
 
-    private fun updatePreview(@Suppress("UNUSED_PARAMETER") event: ListSelectionEvent? = null) {
-        previewJob?.cancel()
-        previewJob = dialogScope.launch(ModalityState.defaultModalityState().asContextElement()) {
-            val selected = withContext(Dispatchers.EDT) {
-                resultList.selectedValue?.match
-            } ?: run {
-                withContext(Dispatchers.EDT) {
-                    isOKActionEnabled = false
-                }
-                preview.show(PreviewContent.empty)
-                return@launch
-            }
-            withContext(Dispatchers.EDT) {
-                isOKActionEnabled = true
-            }
-            val previewContent = previewLoader.load(selected.path)
-            preview.show(
-                previewContent,
-                scrollToLine = selected.line,
-                highlightRanges = previewHighlightsFor(selected),
-            )
+    private fun render(state: LiveGrepDialogState) {
+        val items = state.matches.toGroupedGrepListItems(project.basePath)
+        isRenderingState = true
+        try {
+            resultModel.replaceAll(items)
+            renderCandidateListState(state, items)
+            statusLabel.text = state.statusText
+            isOKActionEnabled = state.canOpenSelectedMatch
+            renderSelectedIndex(items.selectedListIndexFor(state.selectedMatch))
+        } finally {
+            isRenderingState = false
         }
     }
 
-    private fun previewHighlightsFor(selected: GrepMatch): List<PreviewHighlightRange> {
-        return visibleMatches
-            .asSequence()
-            .filter { it.path == selected.path }
-            .flatMap { match ->
-                match.matchRanges.map { range ->
-                    PreviewHighlightRange(line = match.line, range = range)
-                }
-            }
-            .toList()
+    private fun renderCandidateListState(state: LiveGrepDialogState, items: List<GrepListItem>) {
+        if (state.isSearching) {
+            candidateListPanel.showSearching(state.hasSearched)
+        } else if (state.hasError) {
+            candidateListPanel.showError()
+        } else if (state.hasSearched) {
+            candidateListPanel.showResults(items.isNotEmpty())
+        } else {
+            candidateListPanel.showInitialEmptyText()
+        }
+    }
+
+    private fun renderSelectedIndex(selectedIndex: Int) {
+        if (resultList.selectedIndex == selectedIndex) return
+
+        resultList.selectedIndex = selectedIndex
+        if (selectedIndex >= 0) {
+            resultList.ensureIndexIsVisible(selectedIndex)
+        }
+    }
+
+    private suspend fun renderPreview(previewState: LiveGrepPreviewState) {
+        if (renderedPreviewState == previewState) return
+
+        renderedPreviewState = previewState
+        preview.show(
+            previewState.content,
+            scrollToLine = previewState.scrollToLine,
+            highlightRanges = previewState.highlightRanges,
+        )
+    }
+
+    private fun onCandidateSelected(event: ListSelectionEvent) {
+        if (isRenderingState || event.valueIsAdjusting) return
+
+        viewModel.onSelectMatch(resultList.selectedValue?.match)
     }
 
     private fun dialogModalityContext() = ModalityState.stateForComponent(rootPane).asContextElement()
@@ -261,12 +254,12 @@ class LiveGrepDialog(
 
         actionMap.put(ACTION_SELECT_NEXT, object : AbstractAction() {
             override fun actionPerformed(event: ActionEvent?) {
-                moveSelectionBy(1)
+                viewModel.onSelectNextMatch()
             }
         })
         actionMap.put(ACTION_SELECT_PREVIOUS, object : AbstractAction() {
             override fun actionPerformed(event: ActionEvent?) {
-                moveSelectionBy(-1)
+                viewModel.onSelectPreviousMatch()
             }
         })
         actionMap.put(ACTION_FOCUS_SEARCH_FIELD, object : AbstractAction() {
@@ -297,31 +290,6 @@ class LiveGrepDialog(
         })
     }
 
-    private fun moveSelectionBy(offset: Int) {
-        val lastIndex = resultModel.size - 1
-        if (lastIndex < 0) return
-
-        val selectedIndex = resultList.selectedIndex
-        val currentIndex = selectedIndex.takeIf { it >= 0 } ?: 0
-        val nextIndex = nextMatchIndex(currentIndex, offset, lastIndex)
-        if (selectedIndex >= 0 && nextIndex == selectedIndex) return
-
-        resultList.selectedIndex = nextIndex
-        resultList.ensureIndexIsVisible(nextIndex)
-    }
-
-    private fun nextMatchIndex(currentIndex: Int, offset: Int, lastIndex: Int): Int {
-        var nextIndex = (currentIndex + offset).coerceIn(0, lastIndex)
-        while (nextIndex in 0..lastIndex && resultModel.getElementAt(nextIndex) is GrepFileHeaderItem) {
-            val candidate = (nextIndex + offset.coerceIn(-1, 1)).coerceIn(0, lastIndex)
-            if (candidate == nextIndex) {
-                break
-            }
-            nextIndex = candidate
-        }
-        return nextIndex
-    }
-
     private companion object {
         const val ACTION_SELECT_NEXT = "liveGrep.selectNextCandidate"
         const val ACTION_SELECT_PREVIOUS = "liveGrep.selectPreviousCandidate"
@@ -332,6 +300,13 @@ class LiveGrepDialog(
         const val ACTION_TOGGLE_SMART_CASE = "liveGrep.toggleSmartCase"
         val MENU_SHORTCUT_KEY_MASK = if (SystemInfo.isMac) KeyEvent.META_DOWN_MASK else KeyEvent.CTRL_DOWN_MASK
     }
+}
+
+private fun List<GrepListItem>.selectedListIndexFor(selectedMatch: GrepMatch?): Int {
+    if (selectedMatch == null) {
+        return LiveGrepDialogState.NO_SELECTION
+    }
+    return indexOfFirst { it.match == selectedMatch }
 }
 
 private class FuzzyFinderLiveGrepSearchBackend(
