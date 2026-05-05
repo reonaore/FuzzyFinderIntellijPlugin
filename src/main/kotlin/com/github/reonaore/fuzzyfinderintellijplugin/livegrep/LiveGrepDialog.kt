@@ -4,7 +4,7 @@ import com.github.reonaore.fuzzyfinderintellijplugin.MyBundle
 import com.github.reonaore.fuzzyfinderintellijplugin.services.FuzzyFinderService
 import com.github.reonaore.fuzzyfinderintellijplugin.services.GrepMatch
 import com.github.reonaore.fuzzyfinderintellijplugin.services.GrepSearchOptions
-import com.github.reonaore.fuzzyfinderintellijplugin.services.GrepSearchResult
+import com.github.reonaore.fuzzyfinderintellijplugin.services.GrepSearchUpdate
 import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.CandidateListLoadingPanel
 import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.FuzzyFinderPreview
 import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.fuzzyFinderSearchTextField
@@ -27,6 +27,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.awt.BorderLayout
@@ -312,8 +313,8 @@ private fun List<GrepListItem>.selectedListIndexFor(selectedMatch: GrepMatch?): 
 private class FuzzyFinderLiveGrepSearchBackend(
     private val service: FuzzyFinderService,
 ) : LiveGrepSearchBackend {
-    override suspend fun grep(query: String, options: GrepSearchOptions): GrepSearchResult {
-        return service.grep(query, options, limit = Int.MAX_VALUE)
+    override fun grepStream(query: String, options: GrepSearchOptions): Flow<GrepSearchUpdate> {
+        return service.grepStream(query, options)
     }
 
     override suspend fun filterMatches(query: String, matches: List<GrepMatch>): List<GrepMatch> {

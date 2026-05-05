@@ -56,6 +56,25 @@ class FuzzyFinderParsersTest {
     }
 
     @Test
+    fun parsesSingleRipgrepJsonLine() {
+        val parsed = FuzzyFinderParsers.parseRgJsonLine(
+            """{"type":"match","data":{"path":{"text":"/repo/src/App.kt"},"lines":{"text":"fun needle() = Unit\n"},"line_number":12,"submatches":[{"match":{"text":"needle"},"start":4,"end":10}]}}""",
+        )
+
+        assertEquals(
+            GrepMatch(
+                path = Path.of("/repo/src/App.kt"),
+                line = 12,
+                column = 5,
+                lineText = "fun needle() = Unit",
+                matchRanges = listOf(TextRange(4, 10)),
+            ),
+            parsed,
+        )
+        assertEquals(null, FuzzyFinderParsers.parseRgJsonLine("""{"type":"begin","data":{}}"""))
+    }
+
+    @Test
     fun parsesRipgrepMatchesWithColonsInPath() {
         val parsed = FuzzyFinderParsers.parseRgMatches(
             """

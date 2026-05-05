@@ -1,6 +1,7 @@
 package com.github.reonaore.fuzzyfinderintellijplugin.services
 
 import junit.framework.TestCase.assertEquals
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import org.junit.Test
 import java.nio.charset.StandardCharsets
@@ -202,6 +203,60 @@ class FuzzyFinderSearchEngineTest {
             runner.calls[0].command,
         )
         assertEquals(setOf(1), runner.calls[0].noMatchExitCodes)
+    }
+
+    @Test
+    fun grepStreamParsesPartialRipgrepMatchesAndPassesLineBufferedOption() = runBlocking {
+        val runner = RecordingCommandRunner(
+            outputs = listOf(
+                """
+                {"type":"match","data":{"path":{"text":"/repo/src/App.kt"},"lines":{"text":"fun needle() = Unit\n"},"line_number":12,"submatches":[{"match":{"text":"needle"},"start":4,"end":10}]}}
+                {"type":"match","data":{"path":{"text":"/repo/src/Other.kt"},"lines":{"text":"needle()\n"},"line_number":24,"submatches":[{"match":{"text":"needle"},"start":0,"end":6}]}}
+                """.trimIndent().toByteArray(),
+            ),
+        )
+        val engine = FuzzyFinderSearchEngine(
+            fdExecutable = "fd",
+            fzfExecutable = "fzf",
+            rgExecutable = "rg",
+            runner = runner,
+        )
+
+        val updates = engine.grepStream(
+            query = "needle",
+            options = GrepSearchOptions(),
+            root = Path.of("/repo"),
+        ).toList()
+
+        assertEquals(2, updates.last().totalMatches)
+        assertEquals(true, updates.last().isComplete)
+        assertEquals(
+            listOf(
+                GrepMatch(
+                    path = Path.of("/repo/src/App.kt"),
+                    line = 12,
+                    column = 5,
+                    lineText = "fun needle() = Unit",
+                    matchRanges = listOf(TextRange(4, 10)),
+                ),
+                GrepMatch(
+                    path = Path.of("/repo/src/Other.kt"),
+                    line = 24,
+                    column = 1,
+                    lineText = "needle()",
+                    matchRanges = listOf(TextRange(0, 6)),
+                ),
+            ),
+            updates.last().matches,
+        )
+        assertEquals(
+            CommandSpec(
+                executable = "rg",
+                parameters = listOf("--json", "--line-buffered", "--smart-case", "--follow", "--glob", "!.git", "--", "needle", "/repo"),
+            ),
+            runner.calls.single().command,
+        )
+        assertEquals(setOf(1), runner.calls.single().noMatchExitCodes)
     }
 
     @Test

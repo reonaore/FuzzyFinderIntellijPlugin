@@ -8,6 +8,8 @@ import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.project.Project
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 import java.nio.file.Path
 
 @Service(Service.Level.PROJECT)
@@ -41,18 +43,20 @@ class FuzzyFinderService(
         )
     }
 
-    suspend fun grep(query: String, options: GrepSearchOptions, limit: Int = MAX_RESULTS): GrepSearchResult {
-        val basePath = project.basePath ?: return GrepSearchResult(
-            totalMatches = 0,
-            query = query,
-            matches = emptyList(),
+    fun grepStream(query: String, options: GrepSearchOptions): Flow<GrepSearchUpdate> {
+        val basePath = project.basePath ?: return flowOf(
+            GrepSearchUpdate(
+                totalMatches = 0,
+                query = query,
+                matches = emptyList(),
+                isComplete = true,
+            ),
         )
 
-        return searchEngine.grep(
+        return searchEngine.grepStream(
             query = query,
             options = options,
             root = Path.of(basePath),
-            limit = limit,
         )
     }
 
