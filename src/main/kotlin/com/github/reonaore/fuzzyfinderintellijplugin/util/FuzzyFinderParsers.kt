@@ -2,9 +2,15 @@ package com.github.reonaore.fuzzyfinderintellijplugin.util
 
 import com.github.reonaore.fuzzyfinderintellijplugin.services.GrepMatch
 import com.github.reonaore.fuzzyfinderintellijplugin.services.TextRange
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
 import java.nio.charset.StandardCharsets
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -42,20 +48,24 @@ object FuzzyFinderParsers {
     }
 
     private fun parseRgJsonLine(line: String): GrepMatch? {
-        val rgLine = runCatching { json.decodeFromString<RgJsonLine>(line) }.getOrNull() ?: return null
-        if (rgLine.type != RgMessageType.MATCH) {
+        val rgLine = runCatching { json.parseToJsonElement(line).jsonObject }.getOrNull() ?: return null
+        if (rgLine.stringAt("type") != "match") {
             return null
         }
 
-        val data = rgLine.data
-        val path = data.path.text.ifBlank { return null }
-        val lineText = data.lines.text.trimEnd('\n', '\r')
-        val lineNumber = data.lineNumber.toInt().takeIf { it > 0 } ?: return null
-        val ranges = data.submatches
-            .map { submatch ->
+        val data = rgLine.objectAt("data") ?: return null
+        val path = data.objectAt("path")?.stringAt("text")?.ifBlank { return null } ?: return null
+        val lineText = data.objectAt("lines")?.stringAt("text")?.trimEnd('\n', '\r') ?: return null
+        val lineNumber = data.longAt("line_number")?.toInt()?.takeIf { it > 0 } ?: return null
+        val ranges = data.arrayAt("submatches")
+            .orEmpty()
+            .mapNotNull(JsonElement::asObjectOrNull)
+            .mapNotNull { submatch ->
+                val start = submatch.intAt("start") ?: return@mapNotNull null
+                val end = submatch.intAt("end") ?: return@mapNotNull null
                 TextRange(
-                    startOffset = utf8ByteOffsetToCharIndex(lineText, submatch.start),
-                    endOffset = utf8ByteOffsetToCharIndex(lineText, submatch.end),
+                    startOffset = utf8ByteOffsetToCharIndex(lineText, start),
+                    endOffset = utf8ByteOffsetToCharIndex(lineText, end),
                 )
             }
             .filter { it.startOffset <= it.endOffset }
@@ -111,49 +121,14 @@ object FuzzyFinderParsers {
     }
 }
 
-@Serializable
-private data class RgJsonLine(
-    val type: RgMessageType = RgMessageType.UNKNOWN,
-    val data: RgMatchData = RgMatchData(),
-)
+private fun JsonElement.asObjectOrNull(): JsonObject? = runCatching { jsonObject }.getOrNull()
 
-@Serializable
-@Suppress("unused")
-private enum class RgMessageType {
-    @SerialName("begin")
-    BEGIN,
+private fun JsonObject.objectAt(name: String): JsonObject? = get(name)?.asObjectOrNull()
 
-    @SerialName("context")
-    CONTEXT,
+private fun JsonObject.arrayAt(name: String): List<JsonElement>? = runCatching { get(name)?.jsonArray }.getOrNull()
 
-    @SerialName("end")
-    END,
+private fun JsonObject.stringAt(name: String): String? = get(name)?.jsonPrimitive?.contentOrNull
 
-    @SerialName("match")
-    MATCH,
+private fun JsonObject.intAt(name: String): Int? = get(name)?.jsonPrimitive?.intOrNull
 
-    @SerialName("summary")
-    SUMMARY,
-
-    UNKNOWN,
-}
-
-@Serializable
-private data class RgMatchData(
-    val path: RgText = RgText(),
-    val lines: RgText = RgText(),
-    @SerialName("line_number")
-    val lineNumber: Long = 0,
-    val submatches: List<RgSubmatch> = emptyList(),
-)
-
-@Serializable
-private data class RgText(
-    val text: String = "",
-)
-
-@Serializable
-private data class RgSubmatch(
-    val start: Int = 0,
-    val end: Int = 0,
-)
+private fun JsonObject.longAt(name: String): Long? = get(name)?.jsonPrimitive?.longOrNull

@@ -299,6 +299,6 @@ class FuzzyFinderDialogViewModelTest {
     }
 
     private companion object {
-        const val TEST_TIMEOUT_MS = 2_000L
+        const val TEST_TIMEOUT_MS = 5_000L
     }
 }

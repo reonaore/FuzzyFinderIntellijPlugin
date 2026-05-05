@@ -266,6 +266,7 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
     }
 }
 
+@Suppress("unused")
 private fun Path.toFileListItem(basePath: String?, query: String): FileListItem {
     val relativePath = relativePathFrom(basePath)
     val fileName = fileName?.toString().orEmpty().ifBlank { relativePath }
