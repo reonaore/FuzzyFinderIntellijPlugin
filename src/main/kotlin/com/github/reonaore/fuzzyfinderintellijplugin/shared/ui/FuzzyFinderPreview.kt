@@ -15,6 +15,7 @@ import com.intellij.openapi.editor.markup.RangeHighlighter
 import com.intellij.openapi.editor.markup.TextAttributes
 import com.intellij.openapi.fileTypes.PlainTextFileType
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.text.StringUtil
 import com.intellij.ui.JBColor
 import java.awt.Font
 
@@ -42,6 +43,7 @@ class FuzzyFinderPreview(
         highlightRanges: List<PreviewHighlightRange> = emptyList(),
     ) {
         val (text, virtualFile) = content
+        val normalizedText = normalizePreviewTextForEditor(text)
         val highlighter = readAction {
             if (virtualFile != null && !virtualFile.isDirectory && !virtualFile.fileType.isBinary) {
                 EditorHighlighterFactory.getInstance().createEditorHighlighter(project, virtualFile)
@@ -54,8 +56,8 @@ class FuzzyFinderPreview(
             editor.highlighter = highlighter
             editor.caretModel.moveToOffset(0)
             editor.scrollingModel.scrollVertically(0)
-            document.setText(text)
-            addPreviewHighlighters(text, highlightRanges)
+            document.setText(normalizedText)
+            addPreviewHighlighters(normalizedText, highlightRanges)
             scrollToLine?.let { line ->
                 val lineIndex = (line - 1).coerceIn(0, document.lineCount - 1)
                 editor.caretModel.moveToLogicalPosition(com.intellij.openapi.editor.LogicalPosition(lineIndex, 0))
@@ -92,6 +94,10 @@ class FuzzyFinderPreview(
         previewHighlighters.forEach(editor.markupModel::removeHighlighter)
         previewHighlighters.clear()
     }
+}
+
+internal fun normalizePreviewTextForEditor(text: String): String {
+    return StringUtil.convertLineSeparators(text)
 }
 
 internal fun previewHighlightTextOffsets(text: String, highlightRanges: List<PreviewHighlightRange>): List<TextRange> {

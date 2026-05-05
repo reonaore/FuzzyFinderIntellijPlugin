@@ -4,7 +4,6 @@ import com.github.reonaore.fuzzyfinderintellijplugin.MyBundle
 import com.github.reonaore.fuzzyfinderintellijplugin.services.FuzzyFinderService
 import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.CandidateListLoadingPanel
 import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.FuzzyFinderPreview
-import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.FuzzyFinderPreviewLoader
 import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.PreviewContent
 import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.contiguousHighlightRanges
 import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.fuzzyFinderSearchTextField
@@ -25,7 +24,6 @@ import com.intellij.ui.ScrollPaneFactory
 import com.intellij.ui.components.JBLabel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
@@ -47,12 +45,11 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
 
     private val service = project.service<FuzzyFinderService>()
     private val optionsPanel = FuzzyFinderOptionsPanel()
-    private val previewLoader = FuzzyFinderPreviewLoader()
     private val statusLabel = JBLabel(MyBundle.message("dialog.status.loading"))
     private val resultModel = CollectionListModel<FileListItem>()
     private val resultList = fuzzyFinderFileList(
         resultModel,
-        this::updatePreview,
+        this::onCandidateSelected,
     ) { event ->
         if (event.clickCount == 2) {
             doOKAction()
@@ -64,7 +61,8 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
     )
     private val preview = FuzzyFinderPreview(project)
     private val dialogScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    private var previewJob: Job? = null
+    private var renderedPreviewContent: PreviewContent? = null
+    private var isRenderingState = false
     private val searchField = fuzzyFinderSearchTextField(placeHolderText = "Search")
     private val viewModel = FuzzyFinderDialogViewModel(service, dialogScope, optionsPanel.currentOptions())
 
@@ -125,85 +123,83 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
 
     private fun bind() {
         searchField.onTextChanged {
-            viewModel.onQueryChanged(searchField.text)
+            viewModel.onUpdateQuery(searchField.text)
         }
         optionsPanel.setOnOptionsChanged {
-            viewModel.onOptionsChanged(optionsPanel.currentOptions())
+            viewModel.onUpdateOptions(optionsPanel.currentOptions())
         }
-        bindViewModel()
+        observeState()
         triggerInitialSearch()
     }
 
     private fun triggerInitialSearch() {
-        viewModel.onQueryChanged(searchField.text)
+        viewModel.onUpdateQuery(searchField.text)
     }
 
-    private fun bindViewModel() {
-        @Suppress("unused")
-        fun Path.toFileListItem(basePath: String?, query: String): FileListItem {
-            val relativePath = this.relativePathFrom(basePath)
-            val fileName = this.fileName?.toString().orEmpty().ifBlank { relativePath }
-            val secondaryPath = this.relativeParentPath(basePath)
-
-            return FileListItem(
-                path = this,
-                fileName = fileName,
-                secondaryPath = secondaryPath,
-                highlightRanges = contiguousHighlightRanges(fuzzyMatchIndexes(fileName, query).toSet()),
-                icon = this.fileIcon(),
-            )
-        }
-
+    private fun observeState() {
         dialogScope.launch(dialogModalityContext()) {
             viewModel.state.collectLatest { state ->
-                val items = state.paths.map { path ->
-                    path.toFileListItem(project.basePath, state.query)
-                }
                 withContext(Dispatchers.EDT) {
-                    resultModel.replaceAll(items)
-                    if (state.isSearching) {
-                        candidateListPanel.showSearching(state.hasSearched)
-                    } else if (state.hasError) {
-                        candidateListPanel.showError()
-                    } else {
-                        candidateListPanel.showResults(items.isNotEmpty())
-                    }
-                    statusLabel.text = state.statusText
-                    if (state.paths.isNotEmpty()) {
-                        resultList.selectedIndex = 0
-                    } else {
-                        isOKActionEnabled = false
-                    }
+                    render(state)
                 }
-                updatePreview()
+                renderPreview(state.preview.content)
             }
         }
     }
 
-    private fun updatePreview(@Suppress("UNUSED_PARAMETER") event: ListSelectionEvent? = null) {
-        previewJob?.cancel()
-        previewJob = dialogScope.launch(dialogModalityContext()) {
-            val selected = withContext(Dispatchers.EDT) {
-                resultList.selectedValue?.path
-            } ?: run {
-                withContext(Dispatchers.EDT) {
-                    isOKActionEnabled = false
-                }
-                preview.show(PreviewContent.empty)
-                return@launch
-            }
-            withContext(Dispatchers.EDT) {
-                isOKActionEnabled = true
-            }
-            val previewContent = previewLoader.load(selected)
-            preview.show(previewContent)
+    private fun render(state: FuzzyFinderDialogState) {
+        val items = state.paths.map { path ->
+            path.toFileListItem(project.basePath, state.query)
         }
+
+        isRenderingState = true
+        try {
+            resultModel.replaceAll(items)
+            renderCandidateListState(state, items)
+            statusLabel.text = state.statusText
+            isOKActionEnabled = state.canOpenSelectedFile
+            renderSelectedIndex(state.selectedIndex)
+        } finally {
+            isRenderingState = false
+        }
+    }
+
+    private fun renderCandidateListState(state: FuzzyFinderDialogState, items: List<FileListItem>) {
+        if (state.isSearching) {
+            candidateListPanel.showSearching(state.hasSearched)
+        } else if (state.hasError) {
+            candidateListPanel.showError()
+        } else {
+            candidateListPanel.showResults(items.isNotEmpty())
+        }
+    }
+
+    private fun renderSelectedIndex(selectedIndex: Int) {
+        if (resultList.selectedIndex == selectedIndex) return
+
+        resultList.selectedIndex = selectedIndex
+        if (selectedIndex >= 0) {
+            resultList.ensureIndexIsVisible(selectedIndex)
+        }
+    }
+
+    private suspend fun renderPreview(previewContent: PreviewContent) {
+        if (renderedPreviewContent == previewContent) return
+
+        renderedPreviewContent = previewContent
+        preview.show(previewContent)
+    }
+
+    private fun onCandidateSelected(event: ListSelectionEvent) {
+        if (isRenderingState || event.valueIsAdjusting) return
+
+        viewModel.onSelectCandidate(resultList.selectedIndex)
     }
 
     private fun dialogModalityContext() = ModalityState.stateForComponent(rootPane).asContextElement()
 
     private fun selectedVirtualFile(): VirtualFile? {
-        val selected = resultList.selectedValue?.path ?: return null
+        val selected = viewModel.state.value.selectedPath ?: return null
         val virtualFile = LocalFileSystem.getInstance().findFileByNioFile(selected) ?: return null
         if (virtualFile.isDirectory) return null
         return virtualFile
@@ -228,12 +224,12 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
 
         actionMap.put(ACTION_SELECT_NEXT, object : AbstractAction() {
             override fun actionPerformed(event: ActionEvent?) {
-                moveSelectionBy(1)
+                viewModel.onSelectNextCandidate()
             }
         })
         actionMap.put(ACTION_SELECT_PREVIOUS, object : AbstractAction() {
             override fun actionPerformed(event: ActionEvent?) {
-                moveSelectionBy(-1)
+                viewModel.onSelectPreviousCandidate()
             }
         })
         actionMap.put(ACTION_FOCUS_SEARCH_FIELD, object : AbstractAction() {
@@ -259,18 +255,6 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
         })
     }
 
-    private fun moveSelectionBy(offset: Int) {
-        val lastIndex = resultModel.size - 1
-        if (lastIndex < 0) return
-
-        val selectedIndex = resultList.selectedIndex
-        val currentIndex = selectedIndex.takeIf { it >= 0 } ?: 0
-        val nextIndex = (currentIndex + offset).coerceIn(0, lastIndex)
-
-        resultList.selectedIndex = nextIndex
-        resultList.ensureIndexIsVisible(nextIndex)
-    }
-
     private companion object {
         const val ACTION_SELECT_NEXT = "fuzzyFinder.selectNextCandidate"
         const val ACTION_SELECT_PREVIOUS = "fuzzyFinder.selectPreviousCandidate"
@@ -280,4 +264,19 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
         const val ACTION_TOGGLE_RESPECT_GITIGNORE = "fuzzyFinder.toggleRespectGitIgnore"
         val MENU_SHORTCUT_KEY_MASK = if (SystemInfo.isMac) KeyEvent.META_DOWN_MASK else KeyEvent.CTRL_DOWN_MASK
     }
+}
+
+@Suppress("unused")
+private fun Path.toFileListItem(basePath: String?, query: String): FileListItem {
+    val relativePath = relativePathFrom(basePath)
+    val fileName = fileName?.toString().orEmpty().ifBlank { relativePath }
+    val secondaryPath = relativeParentPath(basePath)
+
+    return FileListItem(
+        path = this,
+        fileName = fileName,
+        secondaryPath = secondaryPath,
+        highlightRanges = contiguousHighlightRanges(fuzzyMatchIndexes(fileName, query).toSet()),
+        icon = fileIcon(),
+    )
 }
