@@ -5,6 +5,7 @@ import com.github.reonaore.fuzzyfinderintellijplugin.services.GrepMatch
 import com.github.reonaore.fuzzyfinderintellijplugin.services.PreviewHighlightRange
 import com.github.reonaore.fuzzyfinderintellijplugin.services.GrepSearchOptions
 import com.github.reonaore.fuzzyfinderintellijplugin.services.GrepSearchResult
+import com.github.reonaore.fuzzyfinderintellijplugin.services.GrepSearchUpdate
 import com.github.reonaore.fuzzyfinderintellijplugin.services.TextRange
 import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.PreviewContent
 import kotlinx.coroutines.CompletableDeferred
@@ -13,6 +14,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
@@ -155,6 +158,114 @@ class LiveGrepDialogViewModelTest {
                 viewModel.state.value.fzfQuery == "other" &&
                     viewModel.state.value.matches == listOf(sourceMatches[1])
             }
+        }
+    }
+
+    @Test
+    fun showsPartialGrepResultsBeforeStreamCompletes() = runBlocking {
+        val firstMatch = grepMatch("/tmp/App.kt", "needle")
+        val secondMatch = grepMatch("/tmp/Other.kt", "other needle")
+        val continueStream = CompletableDeferred<Unit>()
+        val viewModel = LiveGrepDialogViewModel(
+            backend = TestLiveGrepSearchBackend(
+                streamGrep = { query, _ ->
+                    flow {
+                        emit(
+                            GrepSearchUpdate(
+                                totalMatches = 1,
+                                query = query,
+                                matches = listOf(firstMatch),
+                                isComplete = false,
+                            ),
+                        )
+                        continueStream.await()
+                        emit(
+                            GrepSearchUpdate(
+                                totalMatches = 2,
+                                query = query,
+                                matches = listOf(firstMatch, secondMatch),
+                                isComplete = true,
+                            ),
+                        )
+                    }
+                },
+            ),
+            scope = CoroutineScope(Job() + Dispatchers.Default),
+            initialOptions = GrepSearchOptions(),
+            loadPreview = { path -> PreviewContent(path.toString(), null) },
+        )
+
+        viewModel.onUpdateRgQuery("needle")
+
+        withTimeout(TEST_TIMEOUT_MS) {
+            waitUntil { viewModel.state.value.matches == listOf(firstMatch) }
+        }
+        assertTrue(viewModel.state.value.isSearching)
+
+        continueStream.complete(Unit)
+
+        withTimeout(TEST_TIMEOUT_MS) {
+            waitUntil { viewModel.state.value.matches == listOf(firstMatch, secondMatch) && !viewModel.state.value.isSearching }
+        }
+        assertEquals(2, viewModel.state.value.totalMatches)
+    }
+
+    @Test
+    fun filtersPartialGrepResultsWhileStreamIsRunning() = runBlocking {
+        val firstMatch = grepMatch("/tmp/App.kt", "needle")
+        val secondMatch = grepMatch("/tmp/Other.kt", "other needle")
+        val continueStream = CompletableDeferred<Unit>()
+        val viewModel = LiveGrepDialogViewModel(
+            backend = TestLiveGrepSearchBackend(
+                streamGrep = { query, _ ->
+                    flow {
+                        emit(
+                            GrepSearchUpdate(
+                                totalMatches = 2,
+                                query = query,
+                                matches = listOf(firstMatch, secondMatch),
+                                isComplete = false,
+                            ),
+                        )
+                        continueStream.await()
+                        emit(
+                            GrepSearchUpdate(
+                                totalMatches = 2,
+                                query = query,
+                                matches = listOf(firstMatch, secondMatch),
+                                isComplete = true,
+                            ),
+                        )
+                    }
+                },
+                filterMatchesAction = { query, matches ->
+                    matches.filter { it.lineText.contains(query) }
+                },
+            ),
+            scope = CoroutineScope(Job() + Dispatchers.Default),
+            initialOptions = GrepSearchOptions(),
+            loadPreview = { path -> PreviewContent(path.toString(), null) },
+        )
+
+        viewModel.onUpdateRgQuery("needle")
+        withTimeout(TEST_TIMEOUT_MS) {
+            waitUntil { viewModel.state.value.matches == listOf(firstMatch, secondMatch) }
+        }
+
+        viewModel.onUpdateFzfQuery("other")
+
+        withTimeout(TEST_TIMEOUT_MS) {
+            waitUntil {
+                viewModel.state.value.fzfQuery == "other" &&
+                    viewModel.state.value.matches == listOf(secondMatch) &&
+                    viewModel.state.value.isSearching
+            }
+        }
+
+        continueStream.complete(Unit)
+
+        withTimeout(TEST_TIMEOUT_MS) {
+            waitUntil { viewModel.state.value.matches == listOf(secondMatch) && !viewModel.state.value.isSearching }
         }
     }
 
@@ -440,6 +551,7 @@ class LiveGrepDialogViewModelTest {
     }
 
     private class TestLiveGrepSearchBackend(
+        private val streamGrep: ((String, GrepSearchOptions) -> Flow<GrepSearchUpdate>)? = null,
         private val runGrep: suspend (String, GrepSearchOptions) -> GrepSearchResult = { query, _ ->
             GrepSearchResult(
                 totalMatches = 0,
@@ -450,8 +562,18 @@ class LiveGrepDialogViewModelTest {
         private val filterMatchesAction: suspend (String, List<GrepMatch>) -> List<GrepMatch> = { _, matches -> matches },
         private val notifyErrorAction: (String) -> Unit = {},
     ) : LiveGrepSearchBackend {
-        override suspend fun grep(query: String, options: GrepSearchOptions): GrepSearchResult {
-            return runGrep(query, options)
+        override fun grepStream(query: String, options: GrepSearchOptions): Flow<GrepSearchUpdate> {
+            return streamGrep?.invoke(query, options) ?: flow {
+                val result = runGrep(query, options)
+                emit(
+                    GrepSearchUpdate(
+                        totalMatches = result.totalMatches,
+                        query = result.query,
+                        matches = result.matches,
+                        isComplete = true,
+                    ),
+                )
+            }
         }
 
         override suspend fun filterMatches(query: String, matches: List<GrepMatch>): List<GrepMatch> {

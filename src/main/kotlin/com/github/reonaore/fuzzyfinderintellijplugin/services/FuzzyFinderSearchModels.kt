@@ -16,6 +16,13 @@ data class GrepSearchResult(
     val matches: List<GrepMatch>,
 )
 
+data class GrepSearchUpdate(
+    val totalMatches: Int,
+    val query: String,
+    val matches: List<GrepMatch>,
+    val isComplete: Boolean,
+)
+
 data class GrepMatch(
     val path: Path,
     val line: Int,

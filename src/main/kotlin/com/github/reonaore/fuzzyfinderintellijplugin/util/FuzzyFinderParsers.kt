@@ -47,7 +47,7 @@ object FuzzyFinderParsers {
             .toList()
     }
 
-    private fun parseRgJsonLine(line: String): GrepMatch? {
+    fun parseRgJsonLine(line: String): GrepMatch? {
         val rgLine = runCatching { json.parseToJsonElement(line).jsonObject }.getOrNull() ?: return null
         if (rgLine.stringAt("type") != "match") {
             return null

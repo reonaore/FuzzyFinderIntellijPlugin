@@ -5,7 +5,7 @@ import com.github.reonaore.fuzzyfinderintellijplugin.services.FuzzyFinderExcepti
 import com.github.reonaore.fuzzyfinderintellijplugin.services.GrepMatch
 import com.github.reonaore.fuzzyfinderintellijplugin.services.PreviewHighlightRange
 import com.github.reonaore.fuzzyfinderintellijplugin.services.GrepSearchOptions
-import com.github.reonaore.fuzzyfinderintellijplugin.services.GrepSearchResult
+import com.github.reonaore.fuzzyfinderintellijplugin.services.GrepSearchUpdate
 import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.FuzzyFinderPreviewLoader
 import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.PreviewContent
 import kotlinx.coroutines.CancellationException
@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import java.nio.file.Path
 
@@ -72,7 +73,7 @@ sealed interface LiveGrepPreviewState {
 }
 
 internal interface LiveGrepSearchBackend {
-    suspend fun grep(query: String, options: GrepSearchOptions): GrepSearchResult
+    fun grepStream(query: String, options: GrepSearchOptions): Flow<GrepSearchUpdate>
 
     suspend fun filterMatches(query: String, matches: List<GrepMatch>): List<GrepMatch>
 
@@ -178,13 +179,20 @@ class LiveGrepDialogViewModel internal constructor(
         showSearching(request)
         try {
             isGrepSearching = true
-            val result = backend.grep(request.rgQuery, request.options)
-            cachedRgMatches = result.matches
-            cachedRgTotalMatches = result.totalMatches
             cachedRgQuery = request.rgQuery
             cachedRgOptions = request.options
-            val latestRequest = request.copy(fzfQuery = fzfQuery.value)
-            applyFilteredResult(latestRequest, filteredMatches(latestRequest.fzfQuery))
+            cachedRgMatches = emptyList()
+            cachedRgTotalMatches = 0
+            backend.grepStream(request.rgQuery, request.options).collect { update ->
+                cachedRgMatches = update.matches
+                cachedRgTotalMatches = update.totalMatches
+                val latestRequest = request.copy(fzfQuery = fzfQuery.value)
+                applyFilteredResult(
+                    request = latestRequest,
+                    matches = filteredMatches(latestRequest.fzfQuery),
+                    isComplete = update.isComplete,
+                )
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Throwable) {
@@ -223,7 +231,11 @@ class LiveGrepDialogViewModel internal constructor(
 
         showSearching(request)
         try {
-            applyFilteredResult(request, filteredMatches(request.fzfQuery))
+            applyFilteredResult(
+                request = request,
+                matches = filteredMatches(request.fzfQuery),
+                isComplete = !isGrepSearching,
+            )
         } catch (e: CancellationException) {
             throw e
         } catch (e: Throwable) {
@@ -254,13 +266,17 @@ class LiveGrepDialogViewModel internal constructor(
         )
     }
 
-    private fun applyFilteredResult(request: LiveGrepSearchRequest, matches: List<GrepMatch>) {
+    private fun applyFilteredResult(
+        request: LiveGrepSearchRequest,
+        matches: List<GrepMatch>,
+        isComplete: Boolean,
+    ) {
         if (matches.isEmpty()) {
             _state.value = _state.value.copy(
                 rgQuery = request.rgQuery,
                 fzfQuery = request.fzfQuery,
                 options = request.options,
-                isSearching = false,
+                isSearching = !isComplete,
                 hasError = false,
                 hasSearched = true,
                 matches = emptyList(),
@@ -279,19 +295,25 @@ class LiveGrepDialogViewModel internal constructor(
             return
         }
 
-        val selectedMatch = matches.first()
+        val previousSelection = _state.value.selectedMatch
+        val selectedMatch = previousSelection?.takeIf(matches::contains) ?: matches.first()
+        val selectedMatchIndex = matches.indexOf(selectedMatch)
         _state.value = _state.value.copy(
             rgQuery = request.rgQuery,
             fzfQuery = request.fzfQuery,
             options = request.options,
-            isSearching = false,
+            isSearching = !isComplete,
             hasError = false,
             hasSearched = true,
             matches = matches,
-            selectedMatchIndex = 0,
+            selectedMatchIndex = selectedMatchIndex,
             selectedMatch = selectedMatch,
             canOpenSelectedMatch = true,
-            preview = previewStateFor(selectedMatch),
+            preview = if (previousSelection == selectedMatch) {
+                refreshedPreviewStateFor(selectedMatch, matches)
+            } else {
+                previewStateFor(selectedMatch)
+            },
             totalMatches = cachedRgTotalMatches,
             statusText = MyBundle.message(
                 "dialog.grep.status.resultsDetailed",
@@ -299,7 +321,21 @@ class LiveGrepDialogViewModel internal constructor(
                 cachedRgTotalMatches,
             ),
         )
-        loadSelectedPreview(selectedMatch)
+        if (previousSelection != selectedMatch) {
+            loadSelectedPreview(selectedMatch)
+        }
+    }
+
+    private fun refreshedPreviewStateFor(
+        selectedMatch: GrepMatch,
+        visibleMatches: List<GrepMatch>,
+    ): LiveGrepPreviewState {
+        val currentPreview = _state.value.preview
+        return if (currentPreview is LiveGrepPreviewState.Ready && currentPreview.match == selectedMatch) {
+            currentPreview.copy(highlightRanges = previewHighlightsFor(selectedMatch, visibleMatches))
+        } else {
+            currentPreview
+        }
     }
 
     private fun applyError(request: LiveGrepSearchRequest, error: Throwable) {

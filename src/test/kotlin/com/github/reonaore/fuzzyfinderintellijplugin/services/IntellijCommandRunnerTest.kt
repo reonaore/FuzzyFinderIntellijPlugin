@@ -1,8 +1,10 @@
 package com.github.reonaore.fuzzyfinderintellijplugin.services
 
 import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlinx.coroutines.flow.toList
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.OutputStream
@@ -49,6 +51,67 @@ class IntellijCommandRunnerTest {
         }
 
         assertArrayEquals(ByteArray(0), stdout)
+    }
+
+    @Test
+    fun streamsStdoutLinesWhenProcessSucceeds() {
+        val process = FakeProcess(
+            stdout = "first\nsecond\n".toByteArray(),
+            stderr = ByteArray(0),
+            exitCode = 0,
+            waitResult = true,
+        )
+        val runner = IntellijCommandRunner(processFactory = { process })
+
+        val lines = kotlinx.coroutines.runBlocking {
+            runner.streamLines(
+                command = CommandSpec("rg", listOf("--json")),
+                stdin = "input".toByteArray(),
+            ).toList()
+        }
+
+        assertEquals(listOf("first", "second"), lines)
+        assertArrayEquals("input".toByteArray(), process.stdin.toByteArray())
+    }
+
+    @Test
+    fun streamsMoreLinesThanDefaultChannelCapacity() {
+        val expectedLines = (1..200).map { "line$it" }
+        val process = FakeProcess(
+            stdout = expectedLines.joinToString(separator = "\n", postfix = "\n").toByteArray(),
+            stderr = ByteArray(0),
+            exitCode = 0,
+            waitResult = true,
+        )
+        val runner = IntellijCommandRunner(processFactory = { process })
+
+        val lines = kotlinx.coroutines.runBlocking {
+            runner.streamLines(
+                command = CommandSpec("rg", listOf("--json")),
+            ).toList()
+        }
+
+        assertEquals(expectedLines, lines)
+    }
+
+    @Test
+    fun streamLinesThrowsWhenProcessStaysIdlePastTimeout() {
+        val process = FakeProcess(
+            stdout = ByteArray(0),
+            stderr = ByteArray(0),
+            exitCode = 0,
+            waitResult = false,
+        )
+        val runner = IntellijCommandRunner(timeoutSeconds = 1, processFactory = { process })
+
+        val error = captureFailure {
+            kotlinx.coroutines.runBlocking {
+                runner.streamLines(CommandSpec("rg", listOf("--json"))).toList()
+            }
+        }
+
+        assertTrue(error.message.orEmpty().contains("timed out"))
+        assertTrue(process.destroyed.get())
     }
 
     @Test
