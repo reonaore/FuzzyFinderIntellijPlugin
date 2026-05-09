@@ -123,6 +123,8 @@ Leave fields blank to use `fd`, `fzf`, and `rg` from `PATH`.
 | `Alt+S` | Fuzzy Finder | Toggle symlink following |
 | `Alt+G` | Fuzzy Finder | Toggle ignore rules |
 | `Alt+C` | Live Grep | Toggle smart-case matching |
+| `Alt+E` | Finder / Live Grep | Focus extensions field |
+| `Alt+X` | Finder / Live Grep | Focus exclude field |
 
 ## Feature Overview
 
@@ -156,6 +158,9 @@ Leave fields blank to use `fd`, `fzf`, and `rg` from `PATH`.
 - Live Grep supports smart-case toggle and post-search fuzzy filtering for fast narrowing.
 
 ## Troubleshooting
+
+> Note: Option shortcuts (Alt+...) are available while the dialog is focused.
+
 
 ### Commands are not found
 
