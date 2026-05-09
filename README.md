@@ -32,9 +32,31 @@ The plugin opens modeless dialogs with:
 - `fzf` available on `PATH`, or configured in Settings
 - `rg` available on `PATH`, or configured in Settings
 
-## Getting Started
+## Installation
 
-Fuzzy Finder depends on the external `fd`, `fzf`, and `rg` commands. The plugin does not bundle
+- Using the IDE built-in plugin system:
+
+  <kbd>Settings/Preferences</kbd> > <kbd>Plugins</kbd> > <kbd>Marketplace</kbd> > <kbd>Search for "Fuzzy Finder"</kbd> >
+  <kbd>Install</kbd>
+
+- Using JetBrains Marketplace:
+
+  Go to [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/31449-fuzzy-finder) and install it by clicking
+  the <kbd>Install to ...</kbd> button in case your IDE is running.
+
+  You can also download the [latest Marketplace version](https://plugins.jetbrains.com/plugin/31449-fuzzy-finder/versions)
+  and install it manually using
+  <kbd>Settings/Preferences</kbd> > <kbd>Plugins</kbd> > <kbd>⚙️</kbd> > <kbd>Install plugin from disk...</kbd>
+
+- Manually from GitHub Releases:
+
+  Download the [latest release](https://github.com/reonaore/FuzzyFinderIntellijPlugin/releases/latest) and install it
+  manually using
+  <kbd>Settings/Preferences</kbd> > <kbd>Plugins</kbd> > <kbd>⚙️</kbd> > <kbd>Install plugin from disk...</kbd>
+
+## Quick Start
+
+Fuzzy Finder depends on external `fd`, `fzf`, and `rg` commands. The plugin does not bundle
 these executables, so install them before using the plugin.
 
 ### 1. Install `fd`, `fzf`, and `rg`
@@ -51,9 +73,7 @@ On other platforms, follow the official installation guides:
 - [`fzf` installation](https://github.com/junegunn/fzf#installation)
 - [`ripgrep` installation](https://github.com/BurntSushi/ripgrep#installation)
 
-### 2. Check the executable paths
-
-Make sure both commands are available from your shell:
+### 2. Verify executable paths
 
 ```shell
 which fd
@@ -61,17 +81,13 @@ which fzf
 which rg
 ```
 
-If the commands return paths, the plugin can usually use them without additional configuration.
+If these commands return executable paths, the plugin can usually use them without additional configuration.
 
-### 3. Configure paths in the IDE if needed
-
-If IntelliJ IDEA cannot find `fd`, `fzf`, or `rg`, configure the executable paths manually:
+### 3. Configure executable paths in the IDE (if needed)
 
 1. Open `Settings/Preferences | Tools | Fuzzy Finder`.
-2. Set the `fd executable path`.
-3. Set the `fzf executable path`.
-4. Set the `rg executable path`.
-5. Apply the changes.
+2. Set `fd executable path`, `fzf executable path`, and `rg executable path`.
+3. Apply the changes.
 
 For example, Homebrew installations may use paths such as:
 
@@ -81,59 +97,95 @@ For example, Homebrew installations may use paths such as:
 /opt/homebrew/bin/rg
 ```
 
-Leave the fields blank to use `fd`, `fzf`, and `rg` from `PATH`.
+Leave fields blank to use `fd`, `fzf`, and `rg` from `PATH`.
 
-### 4. Open Fuzzy Finder
+### 4. Open dialogs
 
-Open `Tools | Open Fuzzy Finder`, type a query, and press `Enter` to open the selected file.
-Open `Tools | Open Live Grep`, type a ripgrep regex, and press `Enter` to open the selected match.
+- Open `Tools | Open Fuzzy Finder`, type a query, and press `Enter` to open the selected file.
+- Open `Tools | Open Live Grep`, type a ripgrep regex, and press `Enter` to open the selected match.
 
-## Usage
+## Shortcuts
 
-Open `Tools | Open Fuzzy Finder`, type a query, then press `Enter` to open the selected file.
-Open `Tools | Open Live Grep`, type a ripgrep regex, then press `Enter` to jump to the selected match.
+### Common shortcuts (Fuzzy Finder and Live Grep)
 
-The dialogs support:
+| Shortcut | Action |
+| --- | --- |
+| `Ctrl+N` | Move to the next result |
+| `Ctrl+P` | Move to the previous result |
+| `Enter` / double-click | Open the selected item |
+| `Cmd+F` (macOS) / `Ctrl+F` (others) | Refocus the search field |
 
-- `Ctrl+N` to move to the next result
-- `Ctrl+P` to move to the previous result
-- `Cmd+F` on macOS or `Ctrl+F` on other platforms to refocus the search field
-- double-click or `Enter` to open the selected file
-- `Alt+H`, `Alt+S`, and `Alt+G` to toggle hidden files, symlink following, and ignore rules
-- `Alt+C` in Live Grep to toggle smart-case matching
+### Option shortcuts
 
-Executable paths can be configured in `Settings | Tools | Fuzzy Finder`.
+| Shortcut | Scope | Action |
+| --- | --- | --- |
+| `Alt+H` | Fuzzy Finder | Toggle hidden files |
+| `Alt+S` | Fuzzy Finder | Toggle symlink following |
+| `Alt+G` | Fuzzy Finder | Toggle ignore rules |
+| `Alt+C` | Live Grep | Toggle smart-case matching |
+| `Alt+E` | Finder / Live Grep | Focus extensions field |
+| `Alt+X` | Finder / Live Grep | Focus exclude field |
 
 ## Feature Overview
 
+### Search
+
 - Find project files quickly with `fd` and rank matches with `fzf --filter`
 - Search project text with `rg` and jump directly to matching lines
+- Scope searches to IntelliJ content roots in the current project
+
+### Preview
+
 - Preview the current selection without leaving the dialog
-- Narrow results with hidden-file, symlink, ignore-rule, and entry-type options
-- Point the plugin to custom `fd`, `fzf`, and `rg` executables when they are not on `PATH`
-- Search only within the current project's IntelliJ content roots
+- Show syntax-highlighted previews for text files
 
-The initial public release is intended for local projects that already use `fd`, `fzf`, and `rg`.
-The plugin does not bundle these executables and expects them to be installed separately.
+### Filters
 
-## Installation
+- Filter file results by file extension
+- Toggle hidden-file, symlink-following, and ignore-rule options
+- Apply fuzzy filtering to Live Grep results after `rg` regex search
 
-- Using the IDE built-in plugin system:
+### Configuration
 
-  <kbd>Settings/Preferences</kbd> > <kbd>Plugins</kbd> > <kbd>Marketplace</kbd> > <kbd>Search for "Fuzzy Finder"</kbd> >
-  <kbd>Install</kbd>
+- Configure custom `fd`, `fzf`, and `rg` executable paths when tools are not on `PATH`
 
-- Using JetBrains Marketplace:
+## Behavior and UX Notes
 
-  Go to [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/MARKETPLACE_ID) and install it by clicking
-  the <kbd>Install to ...</kbd> button in case your IDE is running.
+- Finder and Live Grep dialogs use Flow-based ViewModels to keep UI state updates predictable.
+- Result panes include clearer loading and empty-result states.
+- Dialogs can refocus the search field quickly via keyboard (`Cmd+F` on macOS, `Ctrl+F` on other platforms).
+- File search supports file-extension filtering and consistent option-toggle behavior.
+- Live Grep supports smart-case toggle and post-search fuzzy filtering for fast narrowing.
 
-  You can also download the [latest release](https://plugins.jetbrains.com/plugin/MARKETPLACE_ID/versions) from
-  JetBrains Marketplace and install it manually using
-  <kbd>Settings/Preferences</kbd> > <kbd>Plugins</kbd> > <kbd>⚙️</kbd> > <kbd>Install plugin from disk...</kbd>
+## Troubleshooting
 
-- Manually:
+> Note: Option shortcuts (Alt+...) are available while the dialog is focused.
 
-  Download the [latest release](https://github.com/reonaore/FuzzyFinderIntellijPlugin/releases/latest) and install it
-  manually using
-  <kbd>Settings/Preferences</kbd> > <kbd>Plugins</kbd> > <kbd>⚙️</kbd> > <kbd>Install plugin from disk...</kbd>
+
+### Commands are not found
+
+- Run:
+
+  ```shell
+  which fd
+  which fzf
+  which rg
+  ```
+
+- If any command is missing, install it and restart the IDE.
+- If commands exist but are still not detected, set explicit paths in `Settings/Preferences | Tools | Fuzzy Finder`.
+
+### No results appear in Fuzzy Finder
+
+- Check whether hidden/ignore/symlink toggles are narrowing results unexpectedly.
+- Confirm you are searching under project content roots (the plugin is scoped to IntelliJ content roots).
+
+### Live Grep results are unexpected
+
+- Live Grep query syntax follows `rg` regex behavior.
+- Toggle `Alt+C` to switch smart-case behavior and compare results.
+
+## Notes
+
+- The plugin does not bundle `fd`, `fzf`, or `rg`; these must be installed separately.
+- For full release history, see [CHANGELOG.md](./CHANGELOG.md).
