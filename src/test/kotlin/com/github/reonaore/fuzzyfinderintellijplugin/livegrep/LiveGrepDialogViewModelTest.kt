@@ -9,15 +9,15 @@ import com.github.reonaore.fuzzyfinderintellijplugin.services.GrepSearchUpdate
 import com.github.reonaore.fuzzyfinderintellijplugin.services.TextRange
 import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.PreviewContent
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -26,10 +26,10 @@ import org.junit.Test
 import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicInteger
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class LiveGrepDialogViewModelTest {
     @Test
-    fun cancelsSupersededGrepWhenQueryChanges() = runBlocking {
-        val scope = CoroutineScope(Job() + Dispatchers.Default)
+    fun cancelsSupersededGrepWhenQueryChanges() = runTest {
         val firstSearchStarted = CompletableDeferred<Unit>()
         val firstSearchCanceled = CompletableDeferred<Unit>()
         val viewModel = LiveGrepDialogViewModel(
@@ -50,27 +50,26 @@ class LiveGrepDialogViewModelTest {
                     )
                 },
             ),
-            scope = scope,
+            scope = backgroundScope,
             initialOptions = GrepSearchOptions(),
             loadPreview = { path -> PreviewContent(path.toString(), null) },
         )
 
         viewModel.onUpdateRgQuery("f")
-        withTimeout(TEST_TIMEOUT_MS) {
-            firstSearchStarted.await()
-        }
+        advancePastSearchDebounce()
+        firstSearchStarted.await()
 
         viewModel.onUpdateRgQuery("fo")
+        advancePastSearchDebounce()
 
-        withTimeout(TEST_TIMEOUT_MS) {
-            firstSearchCanceled.await()
-            waitUntil { viewModel.state.value.rgQuery == "fo" && !viewModel.state.value.isSearching }
-        }
+        firstSearchCanceled.await()
+        advanceUntilIdle()
+        assertTrue(viewModel.state.value.rgQuery == "fo" && !viewModel.state.value.isSearching)
         assertEquals(listOf(grepMatch("/tmp/fo.txt", "fo")), viewModel.state.value.matches)
     }
 
     @Test
-    fun filtersCachedGrepMatchesWhenFzfQueryChanges() = runBlocking {
+    fun filtersCachedGrepMatchesWhenFzfQueryChanges() = runTest {
         val sourceMatches = listOf(
             grepMatch("/tmp/App.kt", "needle"),
             grepMatch("/tmp/Other.kt", "other"),
@@ -88,29 +87,26 @@ class LiveGrepDialogViewModelTest {
                     matches.filter { it.lineText.contains(query) }
                 },
             ),
-            scope = CoroutineScope(Job() + Dispatchers.Default),
+            scope = backgroundScope,
             initialOptions = GrepSearchOptions(),
             loadPreview = { path -> PreviewContent(path.toString(), null) },
         )
 
         viewModel.onUpdateRgQuery("needle")
-        withTimeout(TEST_TIMEOUT_MS) {
-            waitUntil { viewModel.state.value.matches == sourceMatches }
-        }
+        advancePastSearchDebounce()
+        advanceUntilIdle()
+        assertEquals(sourceMatches, viewModel.state.value.matches)
 
         viewModel.onUpdateFzfQuery("other")
+        advancePastSearchDebounce()
 
-        withTimeout(TEST_TIMEOUT_MS) {
-            waitUntil {
-                viewModel.state.value.fzfQuery == "other" &&
-                    viewModel.state.value.matches == listOf(sourceMatches[1])
-            }
-        }
+        assertEquals("other", viewModel.state.value.fzfQuery)
+        assertEquals(listOf(sourceMatches[1]), viewModel.state.value.matches)
         assertEquals(2, viewModel.state.value.totalMatches)
     }
 
     @Test
-    fun doesNotCancelRunningGrepWhenFzfQueryChanges() = runBlocking {
+    fun doesNotCancelRunningGrepWhenFzfQueryChanges() = runTest {
         val sourceMatches = listOf(
             grepMatch("/tmp/App.kt", "needle"),
             grepMatch("/tmp/Other.kt", "other"),
@@ -130,18 +126,17 @@ class LiveGrepDialogViewModelTest {
                     matches.filter { it.lineText.contains(query) }
                 },
             ),
-            scope = CoroutineScope(Job() + Dispatchers.Default),
+            scope = backgroundScope,
             initialOptions = GrepSearchOptions(),
             loadPreview = { path -> PreviewContent(path.toString(), null) },
         )
 
         viewModel.onUpdateRgQuery("needle")
-        withTimeout(TEST_TIMEOUT_MS) {
-            waitUntil { viewModel.state.value.rgQuery == "needle" && viewModel.state.value.isSearching }
-        }
+        advancePastSearchDebounce()
+        assertTrue(viewModel.state.value.rgQuery == "needle" && viewModel.state.value.isSearching)
 
         viewModel.onUpdateFzfQuery("other")
-        delay(SEARCH_DEBOUNCE_WAIT_MS)
+        advancePastSearchDebounce()
 
         assertFalse(grepFinished.isCompleted)
 
@@ -152,17 +147,15 @@ class LiveGrepDialogViewModelTest {
                 matches = sourceMatches,
             ),
         )
+        runCurrent()
+        advanceUntilIdle()
 
-        withTimeout(TEST_TIMEOUT_MS) {
-            waitUntil {
-                viewModel.state.value.fzfQuery == "other" &&
-                    viewModel.state.value.matches == listOf(sourceMatches[1])
-            }
-        }
+        assertEquals("other", viewModel.state.value.fzfQuery)
+        assertEquals(listOf(sourceMatches[1]), viewModel.state.value.matches)
     }
 
     @Test
-    fun showsPartialGrepResultsBeforeStreamCompletes() = runBlocking {
+    fun showsPartialGrepResultsBeforeStreamCompletes() = runTest {
         val firstMatch = grepMatch("/tmp/App.kt", "needle")
         val secondMatch = grepMatch("/tmp/Other.kt", "other needle")
         val continueStream = CompletableDeferred<Unit>()
@@ -190,28 +183,28 @@ class LiveGrepDialogViewModelTest {
                     }
                 },
             ),
-            scope = CoroutineScope(Job() + Dispatchers.Default),
+            scope = backgroundScope,
             initialOptions = GrepSearchOptions(),
             loadPreview = { path -> PreviewContent(path.toString(), null) },
         )
 
         viewModel.onUpdateRgQuery("needle")
+        advancePastSearchDebounce()
 
-        withTimeout(TEST_TIMEOUT_MS) {
-            waitUntil { viewModel.state.value.matches == listOf(firstMatch) }
-        }
+        assertEquals(listOf(firstMatch), viewModel.state.value.matches)
         assertTrue(viewModel.state.value.isSearching)
 
         continueStream.complete(Unit)
+        runCurrent()
+        advanceUntilIdle()
 
-        withTimeout(TEST_TIMEOUT_MS) {
-            waitUntil { viewModel.state.value.matches == listOf(firstMatch, secondMatch) && !viewModel.state.value.isSearching }
-        }
+        assertEquals(listOf(firstMatch, secondMatch), viewModel.state.value.matches)
+        assertFalse(viewModel.state.value.isSearching)
         assertEquals(2, viewModel.state.value.totalMatches)
     }
 
     @Test
-    fun filtersPartialGrepResultsWhileStreamIsRunning() = runBlocking {
+    fun filtersPartialGrepResultsWhileStreamIsRunning() = runTest {
         val firstMatch = grepMatch("/tmp/App.kt", "needle")
         val secondMatch = grepMatch("/tmp/Other.kt", "other needle")
         val continueStream = CompletableDeferred<Unit>()
@@ -242,51 +235,46 @@ class LiveGrepDialogViewModelTest {
                     matches.filter { it.lineText.contains(query) }
                 },
             ),
-            scope = CoroutineScope(Job() + Dispatchers.Default),
+            scope = backgroundScope,
             initialOptions = GrepSearchOptions(),
             loadPreview = { path -> PreviewContent(path.toString(), null) },
         )
 
         viewModel.onUpdateRgQuery("needle")
-        withTimeout(TEST_TIMEOUT_MS) {
-            waitUntil { viewModel.state.value.matches == listOf(firstMatch, secondMatch) }
-        }
+        advancePastSearchDebounce()
+        assertEquals(listOf(firstMatch, secondMatch), viewModel.state.value.matches)
 
         viewModel.onUpdateFzfQuery("other")
+        advancePastSearchDebounce()
 
-        withTimeout(TEST_TIMEOUT_MS) {
-            waitUntil {
-                viewModel.state.value.fzfQuery == "other" &&
-                    viewModel.state.value.matches == listOf(secondMatch) &&
-                    viewModel.state.value.isSearching
-            }
-        }
+        assertEquals("other", viewModel.state.value.fzfQuery)
+        assertEquals(listOf(secondMatch), viewModel.state.value.matches)
+        assertTrue(viewModel.state.value.isSearching)
 
         continueStream.complete(Unit)
+        runCurrent()
+        advanceUntilIdle()
 
-        withTimeout(TEST_TIMEOUT_MS) {
-            waitUntil { viewModel.state.value.matches == listOf(secondMatch) && !viewModel.state.value.isSearching }
-        }
+        assertEquals(listOf(secondMatch), viewModel.state.value.matches)
+        assertFalse(viewModel.state.value.isSearching)
     }
 
     @Test
-    fun marksStateAsErrorWhenGrepFails() = runBlocking {
+    fun marksStateAsErrorWhenGrepFails() = runTest {
         val notifications = mutableListOf<String>()
         val viewModel = LiveGrepDialogViewModel(
             backend = TestLiveGrepSearchBackend(
                 runGrep = { _, _ -> throw FuzzyFinderException("rg failed") },
                 notifyErrorAction = notifications::add,
             ),
-            scope = CoroutineScope(Job() + Dispatchers.Default),
+            scope = backgroundScope,
             initialOptions = GrepSearchOptions(),
             loadPreview = { path -> PreviewContent(path.toString(), null) },
         )
 
         viewModel.onUpdateRgQuery("query")
-
-        withTimeout(TEST_TIMEOUT_MS) {
-            waitUntil { viewModel.state.value.hasError }
-        }
+        advancePastSearchDebounce()
+        advanceUntilIdle()
 
         assertFalse(viewModel.state.value.isSearching)
         assertTrue(viewModel.state.value.hasSearched)
@@ -299,16 +287,14 @@ class LiveGrepDialogViewModelTest {
     }
 
     @Test
-    fun selectsFirstMatchAndLoadsPreviewWhenGrepReturnsResults() = runBlocking {
+    fun selectsFirstMatchAndLoadsPreviewWhenGrepReturnsResults() = runTest {
         val firstMatch = grepMatch("/tmp/App.kt", "needle")
         val secondMatch = grepMatch("/tmp/Other.kt", "other")
         val viewModel = viewModelWithMatches(firstMatch, secondMatch)
 
         viewModel.onUpdateRgQuery("needle")
-
-        withTimeout(TEST_TIMEOUT_MS) {
-            waitUntil { viewModel.state.value.preview is LiveGrepPreviewState.Ready }
-        }
+        advancePastSearchDebounce()
+        advanceUntilIdle()
 
         assertEquals(0, viewModel.state.value.selectedMatchIndex)
         assertEquals(firstMatch, viewModel.state.value.selectedMatch)
@@ -317,14 +303,12 @@ class LiveGrepDialogViewModelTest {
     }
 
     @Test
-    fun clearsSelectionAndPreviewWhenGrepReturnsNoResults() = runBlocking {
+    fun clearsSelectionAndPreviewWhenGrepReturnsNoResults() = runTest {
         val viewModel = viewModelWithMatches()
 
         viewModel.onUpdateRgQuery("missing")
-
-        withTimeout(TEST_TIMEOUT_MS) {
-            waitUntil { viewModel.state.value.hasSearched }
-        }
+        advancePastSearchDebounce()
+        advanceUntilIdle()
 
         assertEquals(LiveGrepDialogState.NO_SELECTION, viewModel.state.value.selectedMatchIndex)
         assertNull(viewModel.state.value.selectedMatch)
@@ -333,15 +317,15 @@ class LiveGrepDialogViewModelTest {
     }
 
     @Test
-    fun clampsMatchSelectionWithinVisibleMatches() = runBlocking {
+    fun clampsMatchSelectionWithinVisibleMatches() = runTest {
         val firstMatch = grepMatch("/tmp/App.kt", "needle")
         val secondMatch = grepMatch("/tmp/Other.kt", "other")
         val viewModel = viewModelWithMatches(firstMatch, secondMatch)
 
         viewModel.onUpdateRgQuery("needle")
-        withTimeout(TEST_TIMEOUT_MS) {
-            waitUntil { viewModel.state.value.selectedMatch == firstMatch }
-        }
+        advancePastSearchDebounce()
+        advanceUntilIdle()
+        assertEquals(firstMatch, viewModel.state.value.selectedMatch)
 
         viewModel.onSelectPreviousMatch()
         assertEquals(0, viewModel.state.value.selectedMatchIndex)
@@ -357,7 +341,7 @@ class LiveGrepDialogViewModelTest {
     }
 
     @Test
-    fun doesNotReloadPreviewWhenClampedSelectionIsUnchanged() = runBlocking {
+    fun doesNotReloadPreviewWhenClampedSelectionIsUnchanged() = runTest {
         val match = grepMatch("/tmp/App.kt", "needle")
         val loadCount = AtomicInteger()
         val viewModel = viewModelWithMatches(
@@ -369,9 +353,8 @@ class LiveGrepDialogViewModelTest {
         )
 
         viewModel.onUpdateRgQuery("needle")
-        withTimeout(TEST_TIMEOUT_MS) {
-            waitUntil { viewModel.state.value.preview is LiveGrepPreviewState.Ready }
-        }
+        advancePastSearchDebounce()
+        advanceUntilIdle()
 
         viewModel.onSelectPreviousMatch()
         viewModel.onSelectNextMatch()
@@ -383,7 +366,7 @@ class LiveGrepDialogViewModelTest {
     }
 
     @Test
-    fun resetsSelectionToFirstFilteredMatchWhenFzfQueryChanges() = runBlocking {
+    fun resetsSelectionToFirstFilteredMatchWhenFzfQueryChanges() = runTest {
         val sourceMatches = listOf(
             grepMatch("/tmp/App.kt", "needle"),
             grepMatch("/tmp/Other.kt", "other"),
@@ -401,35 +384,31 @@ class LiveGrepDialogViewModelTest {
                     matches.filter { it.lineText.contains(query) }
                 },
             ),
-            scope = CoroutineScope(Job() + Dispatchers.Default),
+            scope = backgroundScope,
             initialOptions = GrepSearchOptions(),
             loadPreview = { path -> PreviewContent(path.toString(), null) },
         )
 
         viewModel.onUpdateRgQuery("needle")
-        withTimeout(TEST_TIMEOUT_MS) {
-            waitUntil { viewModel.state.value.matches == sourceMatches }
-        }
+        advancePastSearchDebounce()
+        advanceUntilIdle()
+        assertEquals(sourceMatches, viewModel.state.value.matches)
+
         viewModel.onSelectNextMatch()
-        withTimeout(TEST_TIMEOUT_MS) {
-            waitUntil { viewModel.state.value.selectedMatch == sourceMatches[1] }
-        }
+        assertEquals(sourceMatches[1], viewModel.state.value.selectedMatch)
 
         viewModel.onUpdateFzfQuery("needle")
+        advancePastSearchDebounce()
 
-        withTimeout(TEST_TIMEOUT_MS) {
-            waitUntil {
-                viewModel.state.value.fzfQuery == "needle" &&
-                    viewModel.state.value.matches == listOf(sourceMatches[0])
-            }
-        }
+        assertEquals("needle", viewModel.state.value.fzfQuery)
+        assertEquals(listOf(sourceMatches[0]), viewModel.state.value.matches)
 
         assertEquals(0, viewModel.state.value.selectedMatchIndex)
         assertEquals(sourceMatches[0], viewModel.state.value.selectedMatch)
     }
 
     @Test
-    fun cancelsStalePreviewLoadWhenSelectionChanges() = runBlocking {
+    fun cancelsStalePreviewLoadWhenSelectionChanges() = runTest {
         val firstMatch = grepMatch("/tmp/App.kt", "needle")
         val secondMatch = grepMatch("/tmp/Other.kt", "other")
         val firstPreviewStarted = CompletableDeferred<Unit>()
@@ -453,17 +432,15 @@ class LiveGrepDialogViewModelTest {
         )
 
         viewModel.onUpdateRgQuery("needle")
-        withTimeout(TEST_TIMEOUT_MS) {
-            firstPreviewStarted.await()
-        }
+        advancePastSearchDebounce()
+        firstPreviewStarted.await()
 
         viewModel.onSelectNextMatch()
+        runCurrent()
 
-        withTimeout(TEST_TIMEOUT_MS) {
-            firstPreviewCanceled.await()
-            secondPreviewStarted.await()
-            waitUntil { viewModel.state.value.preview is LiveGrepPreviewState.Ready }
-        }
+        firstPreviewCanceled.await()
+        secondPreviewStarted.await()
+        advanceUntilIdle()
 
         val preview = viewModel.state.value.preview as LiveGrepPreviewState.Ready
         assertEquals(secondMatch, preview.match)
@@ -471,7 +448,7 @@ class LiveGrepDialogViewModelTest {
     }
 
     @Test
-    fun buildsReadyPreviewScrollLineAndHighlightsForMatchesInSameFile() = runBlocking {
+    fun buildsReadyPreviewScrollLineAndHighlightsForMatchesInSameFile() = runTest {
         val firstMatch = grepMatch(
             path = "/tmp/App.kt",
             lineText = "needle one",
@@ -493,10 +470,8 @@ class LiveGrepDialogViewModelTest {
         val viewModel = viewModelWithMatches(firstMatch, secondMatch, otherFileMatch)
 
         viewModel.onUpdateRgQuery("needle")
-
-        withTimeout(TEST_TIMEOUT_MS) {
-            waitUntil { viewModel.state.value.preview is LiveGrepPreviewState.Ready }
-        }
+        advancePastSearchDebounce()
+        advanceUntilIdle()
 
         val preview = viewModel.state.value.preview as LiveGrepPreviewState.Ready
         assertEquals(3, preview.scrollToLine)
@@ -509,10 +484,9 @@ class LiveGrepDialogViewModelTest {
         )
     }
 
-    private suspend fun waitUntil(condition: () -> Boolean) {
-        while (!condition()) {
-            delay(10)
-        }
+    private fun TestScope.advancePastSearchDebounce() {
+        advanceTimeBy(SEARCH_DEBOUNCE_WAIT_MS)
+        runCurrent()
     }
 
     private fun grepMatch(
@@ -530,7 +504,7 @@ class LiveGrepDialogViewModelTest {
         )
     }
 
-    private fun viewModelWithMatches(
+    private fun TestScope.viewModelWithMatches(
         vararg matches: GrepMatch,
         loadPreview: suspend (Path) -> PreviewContent = { path -> PreviewContent(path.toString(), null) },
     ): LiveGrepDialogViewModel {
@@ -544,7 +518,7 @@ class LiveGrepDialogViewModelTest {
                     )
                 },
             ),
-            scope = CoroutineScope(Job() + Dispatchers.Default),
+            scope = backgroundScope,
             initialOptions = GrepSearchOptions(),
             loadPreview = loadPreview,
         )
@@ -586,7 +560,6 @@ class LiveGrepDialogViewModelTest {
     }
 
     private companion object {
-        const val TEST_TIMEOUT_MS = 2_000L
         const val SEARCH_DEBOUNCE_WAIT_MS = 250L
     }
 }
