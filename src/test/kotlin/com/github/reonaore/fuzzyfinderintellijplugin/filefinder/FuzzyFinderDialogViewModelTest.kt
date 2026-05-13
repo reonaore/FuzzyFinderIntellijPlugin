@@ -7,10 +7,14 @@ import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.PreviewContent
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -155,9 +159,10 @@ class FuzzyFinderDialogViewModelTest {
     }
 
     @Test
-    fun resetsSelectionToFirstCandidateWhenSearchResultsChange() = runBlocking {
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun resetsSelectionToFirstCandidateWhenSearchResultsChange() = runTest {
         val viewModel = FuzzyFinderDialogViewModel(
-            scope = CoroutineScope(Job() + Dispatchers.Default),
+            scope = backgroundScope,
             initialOptions = FdSearchOptions(),
             runSearch = { query, _ ->
                 val results = if (query == "first") {
@@ -176,23 +181,22 @@ class FuzzyFinderDialogViewModelTest {
         )
 
         viewModel.onUpdateQuery("first")
-        withTimeout(TEST_TIMEOUT_MS) {
-            waitUntil {
-                viewModel.state.value.query == "first" &&
-                    !viewModel.state.value.isSearching &&
-                    viewModel.state.value.selectedPath == Path.of("/tmp/first-a.txt")
-            }
-        }
+        advanceTimeBy(SEARCH_DEBOUNCE_TIMEOUT_MS)
+        advanceUntilIdle()
+        assertEquals("first", viewModel.state.value.query)
+        assertFalse(viewModel.state.value.isSearching)
+        assertEquals(Path.of("/tmp/first-a.txt"), viewModel.state.value.selectedPath)
+
         viewModel.onSelectNextCandidate()
-        withTimeout(TEST_TIMEOUT_MS) {
-            waitUntil { viewModel.state.value.selectedIndex == 1 }
-        }
+        advanceUntilIdle()
+        assertEquals(1, viewModel.state.value.selectedIndex)
 
         viewModel.onUpdateQuery("second")
-        withTimeout(TEST_TIMEOUT_MS) {
-            waitUntil { viewModel.state.value.query == "second" && !viewModel.state.value.isSearching }
-        }
+        advanceTimeBy(SEARCH_DEBOUNCE_TIMEOUT_MS)
+        advanceUntilIdle()
 
+        assertEquals("second", viewModel.state.value.query)
+        assertFalse(viewModel.state.value.isSearching)
         assertEquals(0, viewModel.state.value.selectedIndex)
         assertEquals(Path.of("/tmp/second-a.txt"), viewModel.state.value.selectedPath)
         assertEquals(Path.of("/tmp/second-a.txt"), (viewModel.state.value.preview as FuzzyFinderPreviewState.Ready).path)
@@ -300,5 +304,6 @@ class FuzzyFinderDialogViewModelTest {
 
     private companion object {
         const val TEST_TIMEOUT_MS = 5_000L
+        const val SEARCH_DEBOUNCE_TIMEOUT_MS = 1_000L
     }
 }
