@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+### Added
+
+- Live Grep now streams search results as `rg` finds matches.
+
+### Changed
+
+- README setup, shortcut, and troubleshooting guidance has been expanded.
+- IntelliJ Platform Gradle Plugin, Gradle wrapper, and coroutine test dependencies have been updated.
+
+### Fixed
+
+- Live Grep ViewModel tests now declare the coroutine test dependency they require.
+
 ## [0.3.1] - 2026-05-01
 
 ### Added
