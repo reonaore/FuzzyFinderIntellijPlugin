@@ -20,6 +20,7 @@ class LiveGrepOptionsPanel {
     private val followSymlinksCheckBox = JCheckBox(FuzzyFinderOptionsPanel.mnemonicLabel("Follow symlinks", 's'))
     private val respectGitIgnoreCheckBox = JCheckBox(FuzzyFinderOptionsPanel.mnemonicLabel(".gitignore", 'g'))
     private val smartCaseCheckBox = JCheckBox(FuzzyFinderOptionsPanel.mnemonicLabel("Smart case", 'c'))
+    private val regexCheckBox = JCheckBox(FuzzyFinderOptionsPanel.mnemonicLabel("Regex", 'r'))
     private val extensionsField = JBTextField()
     private val excludeField = JBTextField(DEFAULT_EXCLUDES)
     private val extensionsLabel = JLabel(FuzzyFinderOptionsPanel.mnemonicLabel("Extensions", 'E')).apply {
@@ -41,15 +42,18 @@ class LiveGrepOptionsPanel {
         followSymlinksCheckBox.mnemonic = KeyEvent.VK_S
         respectGitIgnoreCheckBox.mnemonic = KeyEvent.VK_G
         smartCaseCheckBox.mnemonic = KeyEvent.VK_C
+        regexCheckBox.mnemonic = KeyEvent.VK_R
         includeHiddenCheckBox.toolTipText = ALT_H_TOOLTIP
         followSymlinksCheckBox.toolTipText = ALT_S_TOOLTIP
         respectGitIgnoreCheckBox.toolTipText = ALT_G_TOOLTIP
         smartCaseCheckBox.toolTipText = ALT_C_TOOLTIP
+        regexCheckBox.toolTipText = ALT_R_TOOLTIP
 
         includeHiddenCheckBox.addActionListener { onOptionsChangedCallback() }
         followSymlinksCheckBox.addActionListener { onOptionsChangedCallback() }
         respectGitIgnoreCheckBox.addActionListener { onOptionsChangedCallback() }
         smartCaseCheckBox.addActionListener { onOptionsChangedCallback() }
+        regexCheckBox.addActionListener { onOptionsChangedCallback() }
         extensionsField.document.addDocumentListener(object : DocumentAdapter() {
             override fun textChanged(e: javax.swing.event.DocumentEvent) {
                 onOptionsChangedCallback()
@@ -85,7 +89,8 @@ class LiveGrepOptionsPanel {
             addOptionComponent(this, includeHiddenCheckBox, gridx = 0, gridy = 1, topInset = 4)
             addOptionComponent(this, followSymlinksCheckBox, gridx = 1, gridy = 1, topInset = 4)
             addOptionComponent(this, respectGitIgnoreCheckBox, gridx = 2, gridy = 1, topInset = 4)
-            addOptionComponent(this, smartCaseCheckBox, gridx = 3, gridy = 1, weightx = 1.0, topInset = 4)
+            addOptionComponent(this, smartCaseCheckBox, gridx = 3, gridy = 1, topInset = 4)
+            addOptionComponent(this, regexCheckBox, gridx = 4, gridy = 1, weightx = 1.0, topInset = 4)
         }
     }
 
@@ -127,6 +132,18 @@ class LiveGrepOptionsPanel {
         toggle(smartCaseCheckBox)
     }
 
+    fun toggleRegex() {
+        toggle(regexCheckBox)
+    }
+
+    fun currentQueryMode(): LiveGrepQueryMode {
+        return if (regexCheckBox.isSelected) {
+            LiveGrepQueryMode.REGEX
+        } else {
+            LiveGrepQueryMode.WORDS
+        }
+    }
+
     private fun toggle(checkBox: JCheckBox) {
         checkBox.doClick(0)
     }
@@ -136,6 +153,12 @@ class LiveGrepOptionsPanel {
     internal fun smartCaseLabelText(): String = smartCaseCheckBox.text
 
     internal fun smartCaseTooltipText(): String = smartCaseCheckBox.toolTipText
+
+    internal fun regexComponent(): JComponent = regexCheckBox
+
+    internal fun regexLabelText(): String = regexCheckBox.text
+
+    internal fun regexTooltipText(): String = regexCheckBox.toolTipText
 
     internal fun extensionsLabelText(): String = extensionsLabel.text
 
@@ -163,6 +186,7 @@ class LiveGrepOptionsPanel {
         const val ALT_S_TOOLTIP = "Alt+S"
         const val ALT_G_TOOLTIP = "Alt+G"
         const val ALT_C_TOOLTIP = "Alt+C"
+        const val ALT_R_TOOLTIP = "Alt+R"
         const val ALT_E_TOOLTIP = "Alt+E"
         const val ALT_X_TOOLTIP = "Alt+X"
     }
