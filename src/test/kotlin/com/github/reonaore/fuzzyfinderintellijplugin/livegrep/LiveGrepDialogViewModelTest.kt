@@ -29,6 +29,77 @@ import java.util.concurrent.atomic.AtomicInteger
 @OptIn(ExperimentalCoroutinesApi::class)
 class LiveGrepDialogViewModelTest {
     @Test
+    fun searchesWithGeneratedRegexInWordsMode() = runTest {
+        val queries = mutableListOf<String>()
+        val viewModel = LiveGrepDialogViewModel(
+            backend = TestLiveGrepSearchBackend(
+                runGrep = { query, _ ->
+                    queries += query
+                    GrepSearchResult(0, query, emptyList())
+                },
+            ),
+            scope = backgroundScope,
+            initialOptions = GrepSearchOptions(),
+        )
+
+        viewModel.onUpdateRgQuery("foo.bar baz")
+        advancePastSearchDebounce()
+        advanceUntilIdle()
+
+        assertEquals(listOf("foo\\.bar.*baz"), queries)
+        assertEquals("foo.bar baz", viewModel.state.value.rgQuery)
+        assertEquals(LiveGrepQueryMode.WORDS, viewModel.state.value.queryMode)
+    }
+
+    @Test
+    fun searchesWithRawInputInRegexMode() = runTest {
+        val queries = mutableListOf<String>()
+        val viewModel = LiveGrepDialogViewModel(
+            backend = TestLiveGrepSearchBackend(
+                runGrep = { query, _ ->
+                    queries += query
+                    GrepSearchResult(0, query, emptyList())
+                },
+            ),
+            scope = backgroundScope,
+            initialOptions = GrepSearchOptions(),
+        )
+
+        viewModel.onUpdateQueryMode(LiveGrepQueryMode.REGEX)
+        viewModel.onUpdateRgQuery("foo.+bar")
+        advancePastSearchDebounce()
+        advanceUntilIdle()
+
+        assertEquals(listOf("foo.+bar"), queries)
+        assertEquals(LiveGrepQueryMode.REGEX, viewModel.state.value.queryMode)
+    }
+
+    @Test
+    fun rerunsGrepWhenQueryModeChanges() = runTest {
+        val queries = mutableListOf<String>()
+        val viewModel = LiveGrepDialogViewModel(
+            backend = TestLiveGrepSearchBackend(
+                runGrep = { query, _ ->
+                    queries += query
+                    GrepSearchResult(0, query, emptyList())
+                },
+            ),
+            scope = backgroundScope,
+            initialOptions = GrepSearchOptions(),
+        )
+
+        viewModel.onUpdateRgQuery("foo bar")
+        advancePastSearchDebounce()
+        advanceUntilIdle()
+
+        viewModel.onUpdateQueryMode(LiveGrepQueryMode.REGEX)
+        runCurrent()
+        advanceUntilIdle()
+
+        assertEquals(listOf("foo.*bar", "foo bar"), queries)
+    }
+
+    @Test
     fun cancelsSupersededGrepWhenQueryChanges() = runTest {
         val firstSearchStarted = CompletableDeferred<Unit>()
         val firstSearchCanceled = CompletableDeferred<Unit>()

@@ -97,6 +97,7 @@ class LiveGrepDialog(
         optionsPanel.setOnOptionsChanged {
             clearFzfQuery()
             viewModel.onUpdateOptions(optionsPanel.currentOptions())
+            viewModel.onUpdateQueryMode(optionsPanel.currentQueryMode())
         }
         observeState()
     }
@@ -252,6 +253,7 @@ class LiveGrepDialog(
         inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_S, KeyEvent.ALT_DOWN_MASK), ACTION_TOGGLE_FOLLOW_SYMLINKS)
         inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_G, KeyEvent.ALT_DOWN_MASK), ACTION_TOGGLE_RESPECT_GITIGNORE)
         inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_C, KeyEvent.ALT_DOWN_MASK), ACTION_TOGGLE_SMART_CASE)
+        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_R, KeyEvent.ALT_DOWN_MASK), ACTION_TOGGLE_REGEX)
 
         actionMap.put(ACTION_SELECT_NEXT, object : AbstractAction() {
             override fun actionPerformed(event: ActionEvent?) {
@@ -289,6 +291,11 @@ class LiveGrepDialog(
                 optionsPanel.toggleSmartCase()
             }
         })
+        actionMap.put(ACTION_TOGGLE_REGEX, object : AbstractAction() {
+            override fun actionPerformed(event: ActionEvent?) {
+                optionsPanel.toggleRegex()
+            }
+        })
     }
 
     private companion object {
@@ -299,6 +306,7 @@ class LiveGrepDialog(
         const val ACTION_TOGGLE_FOLLOW_SYMLINKS = "liveGrep.toggleFollowSymlinks"
         const val ACTION_TOGGLE_RESPECT_GITIGNORE = "liveGrep.toggleRespectGitIgnore"
         const val ACTION_TOGGLE_SMART_CASE = "liveGrep.toggleSmartCase"
+        const val ACTION_TOGGLE_REGEX = "liveGrep.toggleRegex"
         val MENU_SHORTCUT_KEY_MASK = if (SystemInfo.isMac) KeyEvent.META_DOWN_MASK else KeyEvent.CTRL_DOWN_MASK
     }
 }
