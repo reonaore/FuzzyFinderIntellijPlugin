@@ -10,6 +10,12 @@ data class SearchResult(
     val results: List<Path>,
 )
 
+data class CandidateSearchUpdate(
+    val totalCandidates: Int,
+    val candidates: List<Path>,
+    val isComplete: Boolean,
+)
+
 data class GrepSearchResult(
     val totalMatches: Int,
     val query: String,

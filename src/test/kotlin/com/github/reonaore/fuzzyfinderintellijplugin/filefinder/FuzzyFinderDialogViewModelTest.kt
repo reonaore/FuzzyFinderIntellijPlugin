@@ -1,8 +1,8 @@
 package com.github.reonaore.fuzzyfinderintellijplugin.filefinder
 
 import com.github.reonaore.fuzzyfinderintellijplugin.services.FdSearchOptions
+import com.github.reonaore.fuzzyfinderintellijplugin.services.CandidateSearchUpdate
 import com.github.reonaore.fuzzyfinderintellijplugin.services.FuzzyFinderException
-import com.github.reonaore.fuzzyfinderintellijplugin.services.SearchResult
 import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.PreviewContent
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -16,6 +16,8 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -27,52 +29,55 @@ class FuzzyFinderDialogViewModelTest {
     @Test
     fun cancelsSupersededSearchWhenQueryChanges() = runBlocking {
         val scope = CoroutineScope(Job() + Dispatchers.Default)
-        val firstSearchStarted = CompletableDeferred<Unit>()
-        val firstSearchCanceled = CompletableDeferred<Unit>()
+        val updatedSearchStarted = CompletableDeferred<Unit>()
+        val updatedSearchCanceled = CompletableDeferred<Unit>()
         val viewModel = FuzzyFinderDialogViewModel(
+            backend = TestFuzzyFinderSearchBackend(
+                streamCandidates = { options ->
+                    flow {
+                        if (options.includeHidden) {
+                            updatedSearchStarted.complete(Unit)
+                        }
+                        try {
+                            awaitCancellation()
+                        } finally {
+                            if (options.includeHidden) {
+                                updatedSearchCanceled.complete(Unit)
+                            }
+                        }
+                    }
+                },
+                filterCandidatesAction = { query, _ ->
+                    listOf(Path.of("/tmp/$query.txt"))
+                },
+            ),
             scope = scope,
             initialOptions = FdSearchOptions(),
-            runSearch = { query, _ ->
-                if (query == "f") {
-                    firstSearchStarted.complete(Unit)
-                    try {
-                        awaitCancellation()
-                    } finally {
-                        firstSearchCanceled.complete(Unit)
-                    }
-                }
-                SearchResult(
-                    totalCandidates = 1,
-                    query = query,
-                    results = listOf(Path.of("/tmp/$query.txt")),
-                )
-            },
-            notifyError = {},
             loadPreview = { path -> PreviewContent(path.toString(), null) },
         )
 
-        viewModel.onUpdateQuery("f")
+        viewModel.onUpdateOptions(FdSearchOptions(includeHidden = true))
         withTimeout(TEST_TIMEOUT_MS) {
-            firstSearchStarted.await()
+            updatedSearchStarted.await()
         }
 
-        viewModel.onUpdateQuery("fo")
+        viewModel.onUpdateOptions(FdSearchOptions(includeHidden = false))
 
         withTimeout(TEST_TIMEOUT_MS) {
-            firstSearchCanceled.await()
-            waitUntil { viewModel.state.value.query == "fo" && !viewModel.state.value.isSearching }
+            updatedSearchCanceled.await()
         }
-        assertEquals(listOf(Path.of("/tmp/fo.txt")), viewModel.state.value.paths)
     }
 
     @Test
     fun marksStateAsErrorWhenSearchFails() = runBlocking {
         val notifications = mutableListOf<String>()
         val viewModel = FuzzyFinderDialogViewModel(
+            backend = TestFuzzyFinderSearchBackend(
+                streamCandidates = { flow { throw FuzzyFinderException("fd failed") } },
+                notifyErrorAction = notifications::add,
+            ),
             scope = CoroutineScope(Job() + Dispatchers.Default),
             initialOptions = FdSearchOptions(),
-            runSearch = { _, _ -> throw FuzzyFinderException("fd failed") },
-            notifyError = notifications::add,
             loadPreview = { path -> PreviewContent(path.toString(), null) },
         )
 
@@ -127,6 +132,37 @@ class FuzzyFinderDialogViewModelTest {
     }
 
     @Test
+    fun showsPartialCandidatesBeforeStreamCompletes() = runBlocking {
+        val firstPath = Path.of("/tmp/first.txt")
+        val secondPath = Path.of("/tmp/second.txt")
+        val continueStream = CompletableDeferred<Unit>()
+        val viewModel = FuzzyFinderDialogViewModel(
+            backend = TestFuzzyFinderSearchBackend(
+                streamCandidates = {
+                    flow {
+                        emit(CandidateSearchUpdate(1, listOf(firstPath), false))
+                        continueStream.await()
+                        emit(CandidateSearchUpdate(2, listOf(firstPath, secondPath), true))
+                    }
+                },
+            ),
+            scope = CoroutineScope(Job() + Dispatchers.Default),
+            initialOptions = FdSearchOptions(),
+            loadPreview = { path -> PreviewContent(path.toString(), null) },
+        )
+
+        withTimeout(TEST_TIMEOUT_MS) {
+            waitUntil { viewModel.state.value.paths == listOf(firstPath) && viewModel.state.value.isSearching }
+        }
+
+        continueStream.complete(Unit)
+
+        withTimeout(TEST_TIMEOUT_MS) {
+            waitUntil { viewModel.state.value.paths == listOf(firstPath, secondPath) && !viewModel.state.value.isSearching }
+        }
+    }
+
+    @Test
     fun clampsCandidateSelectionWithinResultRange() = runBlocking {
         val firstPath = Path.of("/tmp/first.txt")
         val secondPath = Path.of("/tmp/second.txt")
@@ -162,21 +198,28 @@ class FuzzyFinderDialogViewModelTest {
     @OptIn(ExperimentalCoroutinesApi::class)
     fun resetsSelectionToFirstCandidateWhenSearchResultsChange() = runTest {
         val viewModel = FuzzyFinderDialogViewModel(
+            backend = TestFuzzyFinderSearchBackend(
+                streamCandidates = {
+                    flow {
+                        emit(
+                            CandidateSearchUpdate(
+                                totalCandidates = 2,
+                                candidates = listOf(Path.of("/tmp/first-a.txt"), Path.of("/tmp/first-b.txt")),
+                                isComplete = true,
+                            ),
+                        )
+                    }
+                },
+                filterCandidatesAction = { query, _ ->
+                    if (query == "first") {
+                        listOf(Path.of("/tmp/first-a.txt"), Path.of("/tmp/first-b.txt"))
+                    } else {
+                        listOf(Path.of("/tmp/second-a.txt"), Path.of("/tmp/second-b.txt"))
+                    }
+                },
+            ),
             scope = backgroundScope,
             initialOptions = FdSearchOptions(),
-            runSearch = { query, _ ->
-                val results = if (query == "first") {
-                    listOf(Path.of("/tmp/first-a.txt"), Path.of("/tmp/first-b.txt"))
-                } else {
-                    listOf(Path.of("/tmp/second-a.txt"), Path.of("/tmp/second-b.txt"))
-                }
-                SearchResult(
-                    totalCandidates = results.size,
-                    query = query,
-                    results = results,
-                )
-            },
-            notifyError = {},
             loadPreview = { path -> PreviewContent(path.toString(), null) },
         )
 
@@ -200,6 +243,41 @@ class FuzzyFinderDialogViewModelTest {
         assertEquals(0, viewModel.state.value.selectedIndex)
         assertEquals(Path.of("/tmp/second-a.txt"), viewModel.state.value.selectedPath)
         assertEquals(Path.of("/tmp/second-a.txt"), (viewModel.state.value.preview as FuzzyFinderPreviewState.Ready).path)
+    }
+
+    @Test
+    fun keepsSelectedCandidateWhenItRemainsInStreamedResults() = runBlocking {
+        val firstPath = Path.of("/tmp/first.txt")
+        val secondPath = Path.of("/tmp/second.txt")
+        val continueStream = CompletableDeferred<Unit>()
+        val viewModel = FuzzyFinderDialogViewModel(
+            backend = TestFuzzyFinderSearchBackend(
+                streamCandidates = {
+                    flow {
+                        emit(CandidateSearchUpdate(2, listOf(firstPath, secondPath), false))
+                        continueStream.await()
+                        emit(CandidateSearchUpdate(3, listOf(firstPath, secondPath, Path.of("/tmp/third.txt")), true))
+                    }
+                },
+            ),
+            scope = CoroutineScope(Job() + Dispatchers.Default),
+            initialOptions = FdSearchOptions(),
+            loadPreview = { path -> PreviewContent(path.toString(), null) },
+        )
+
+        withTimeout(TEST_TIMEOUT_MS) {
+            waitUntil { viewModel.state.value.paths.size == 2 }
+        }
+        viewModel.onSelectNextCandidate()
+        assertEquals(secondPath, viewModel.state.value.selectedPath)
+
+        continueStream.complete(Unit)
+
+        withTimeout(TEST_TIMEOUT_MS) {
+            waitUntil { !viewModel.state.value.isSearching }
+        }
+        assertEquals(secondPath, viewModel.state.value.selectedPath)
+        assertEquals(1, viewModel.state.value.selectedIndex)
     }
 
     @Test
@@ -288,18 +366,44 @@ class FuzzyFinderDialogViewModelTest {
         loadPreview: suspend (Path) -> PreviewContent = { path -> PreviewContent(path.toString(), null) },
     ): FuzzyFinderDialogViewModel {
         return FuzzyFinderDialogViewModel(
+            backend = TestFuzzyFinderSearchBackend(
+                streamCandidates = {
+                    flow {
+                        emit(
+                            CandidateSearchUpdate(
+                                totalCandidates = paths.size,
+                                candidates = paths.toList(),
+                                isComplete = true,
+                            ),
+                        )
+                    }
+                },
+                filterCandidatesAction = { _, candidates -> candidates },
+            ),
             scope = CoroutineScope(Job() + Dispatchers.Default),
             initialOptions = FdSearchOptions(),
-            runSearch = { query, _ ->
-                SearchResult(
-                    totalCandidates = paths.size,
-                    query = query,
-                    results = paths.toList(),
-                )
-            },
-            notifyError = {},
             loadPreview = loadPreview,
         )
+    }
+
+    private class TestFuzzyFinderSearchBackend(
+        private val streamCandidates: (FdSearchOptions) -> Flow<CandidateSearchUpdate> = {
+            flow {
+                emit(CandidateSearchUpdate(0, emptyList(), true))
+            }
+        },
+        private val filterCandidatesAction: suspend (String, List<Path>) -> List<Path> = { _, candidates -> candidates },
+        private val notifyErrorAction: (String) -> Unit = {},
+    ) : FuzzyFinderSearchBackend {
+        override fun candidateStream(options: FdSearchOptions): Flow<CandidateSearchUpdate> = streamCandidates(options)
+
+        override suspend fun filterCandidates(query: String, candidates: List<Path>): List<Path> {
+            return filterCandidatesAction(query, candidates)
+        }
+
+        override fun notifyError(message: String) {
+            notifyErrorAction(message)
+        }
     }
 
     private companion object {

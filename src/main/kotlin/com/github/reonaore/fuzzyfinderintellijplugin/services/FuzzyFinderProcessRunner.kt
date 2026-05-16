@@ -35,6 +35,22 @@ interface CommandRunner {
                 emit(line)
             }
     }
+
+    fun streamRecords(
+        command: CommandSpec,
+        delimiter: Char,
+        stdin: ByteArray? = null,
+        noMatchExitCodes: Set<Int> = emptySet(),
+    ): Flow<String> = flow {
+        run(command, stdin, noMatchExitCodes)
+            .toString(StandardCharsets.UTF_8)
+            .split(delimiter)
+            .asSequence()
+            .filter(String::isNotEmpty)
+            .forEach { record ->
+                emit(record)
+            }
+    }
 }
 
 data class CommandSpec(
@@ -101,6 +117,82 @@ class IntellijCommandRunner(
                 lines.forEach { line ->
                     lastOutputAt.set(System.nanoTime())
                     trySend(line).getOrThrow()
+                }
+            }
+        }
+        val stderrJob = async(Dispatchers.IO) {
+            process.errorStream.bufferedReader(StandardCharsets.UTF_8).use { it.readText() }
+        }
+        val waitJob = async(Dispatchers.IO) {
+            process.outputStream.use { output ->
+                stdin?.let(output::write)
+            }
+
+            while (!process.waitFor(PROCESS_WAIT_POLL_MS, TimeUnit.MILLISECONDS)) {
+                val idleNanos = System.nanoTime() - lastOutputAt.get()
+                if (idleNanos > TimeUnit.SECONDS.toNanos(timeoutSeconds)) {
+                    throw FuzzyFinderException(
+                        MyBundle.message("error.commandTimedOut", commandLine.commandLineString),
+                    )
+                }
+            }
+
+            val exitCode = process.exitValue()
+            if (exitCode !in noMatchExitCodes) {
+                checkExitCode(commandLine, exitCode, stderrJob.await())
+            }
+            readerJob.await()
+        }
+
+        waitJob.invokeOnCompletion { error ->
+            if (process.isAlive) {
+                process.destroyForcibly()
+            }
+            error?.let(::close) ?: close()
+        }
+        awaitClose {
+            readerJob.cancel()
+            stderrJob.cancel()
+            waitJob.cancel()
+            if (process.isAlive) {
+                process.destroyForcibly()
+            }
+        }
+    }.buffer(Channel.UNLIMITED)
+
+    override fun streamRecords(
+        command: CommandSpec,
+        delimiter: Char,
+        stdin: ByteArray?,
+        noMatchExitCodes: Set<Int>,
+    ): Flow<String> = channelFlow {
+        val commandLine = GeneralCommandLine(command.executable)
+            .withParentEnvironmentType(GeneralCommandLine.ParentEnvironmentType.CONSOLE)
+            .withParameters(command.parameters)
+
+        val process = createProcess(commandLine)
+        val lastOutputAt = AtomicLong(System.nanoTime())
+        val readerJob = async(Dispatchers.IO) {
+            process.inputStream.bufferedReader(StandardCharsets.UTF_8).use { reader ->
+                val current = StringBuilder()
+                while (true) {
+                    val next = reader.read()
+                    if (next == -1) {
+                        if (current.isNotEmpty()) {
+                            trySend(current.toString()).getOrThrow()
+                        }
+                        break
+                    }
+                    lastOutputAt.set(System.nanoTime())
+                    val character = next.toChar()
+                    if (character == delimiter) {
+                        if (current.isNotEmpty()) {
+                            trySend(current.toString()).getOrThrow()
+                            current.clear()
+                        }
+                    } else {
+                        current.append(character)
+                    }
                 }
             }
         }
