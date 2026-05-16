@@ -68,7 +68,7 @@ class LiveGrepDialog(
     private val dialogScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var renderedPreviewState: LiveGrepPreviewState? = null
     private var isRenderingState = false
-    private val searchField = fuzzyFinderSearchTextField(placeHolderText = MyBundle.message("dialog.grep.search.placeholder"))
+    private val searchField = LiveGrepSearchOptionsField(MyBundle.message("dialog.grep.search.placeholder"))
     private val fzfSearchField = fuzzyFinderSearchTextField(placeHolderText = MyBundle.message("dialog.grep.fuzzy.placeholder"))
     private val viewModel = LiveGrepDialogViewModel(
         backend = FuzzyFinderLiveGrepSearchBackend(service),
@@ -87,24 +87,28 @@ class LiveGrepDialog(
 
 
     private fun bind() {
-        searchField.onTextChanged {
+        searchField.textField.onTextChanged {
             clearFzfQuery()
-            viewModel.onUpdateRgQuery(searchField.text)
+            viewModel.onUpdateRgQuery(searchField.textField.text)
         }
         fzfSearchField.onTextChanged {
             viewModel.onUpdateFzfQuery(fzfSearchField.text)
         }
         optionsPanel.setOnOptionsChanged {
             clearFzfQuery()
-            viewModel.onUpdateOptions(optionsPanel.currentOptions())
-            viewModel.onUpdateQueryMode(optionsPanel.currentQueryMode())
+            viewModel.onUpdateOptions(currentOptions())
+        }
+        searchField.setOnOptionsChanged {
+            clearFzfQuery()
+            viewModel.onUpdateOptions(currentOptions())
+            viewModel.onUpdateQueryMode(searchField.currentQueryMode())
         }
         observeState()
     }
 
     override fun createCenterPanel(): JComponent {
         val searchFieldsPanel = JPanel(GridLayout(0, 1, 0, 4)).apply {
-            add(searchField)
+            add(searchField.textField)
             add(fzfSearchField)
         }
         val controlsPanel = JPanel(BorderLayout(0, 8)).apply {
@@ -125,9 +129,8 @@ class LiveGrepDialog(
             add(splitter, BorderLayout.CENTER)
             add(statusLabel, BorderLayout.SOUTH)
             installCandidateNavigationShortcuts(this)
-            installCandidateNavigationShortcuts(searchField)
-            installCandidateNavigationShortcuts(searchField.textEditor)
-            installCandidateNavigationShortcuts(searchField.textEditor, JComponent.WHEN_FOCUSED)
+            installCandidateNavigationShortcuts(searchField.textField)
+            installCandidateNavigationShortcuts(searchField.textField, JComponent.WHEN_FOCUSED)
             installCandidateNavigationShortcuts(fzfSearchField)
             installCandidateNavigationShortcuts(fzfSearchField.textEditor)
             installCandidateNavigationShortcuts(fzfSearchField.textEditor, JComponent.WHEN_FOCUSED)
@@ -162,13 +165,19 @@ class LiveGrepDialog(
     private fun applyInitialQuery() {
         if (initialQuery.isBlank()) return
 
-        searchField.text = initialQuery
+        searchField.textField.text = initialQuery
     }
 
     private fun clearFzfQuery() {
         if (fzfSearchField.text.isEmpty()) return
 
         fzfSearchField.text = ""
+    }
+
+    private fun currentOptions(): GrepSearchOptions {
+        return optionsPanel.currentOptions().copy(
+            smartCase = searchField.isSmartCaseSelected(),
+        )
     }
 
     private fun observeState() {
@@ -267,8 +276,8 @@ class LiveGrepDialog(
         })
         actionMap.put(ACTION_FOCUS_SEARCH_FIELD, object : AbstractAction() {
             override fun actionPerformed(event: ActionEvent?) {
-                searchField.textEditor.requestFocusInWindow()
-                searchField.textEditor.selectAll()
+                searchField.textField.requestFocusInWindow()
+                searchField.textField.selectAll()
             }
         })
         actionMap.put(ACTION_TOGGLE_INCLUDE_HIDDEN, object : AbstractAction() {
@@ -288,12 +297,12 @@ class LiveGrepDialog(
         })
         actionMap.put(ACTION_TOGGLE_SMART_CASE, object : AbstractAction() {
             override fun actionPerformed(event: ActionEvent?) {
-                optionsPanel.toggleSmartCase()
+                searchField.toggleSmartCase()
             }
         })
         actionMap.put(ACTION_TOGGLE_REGEX, object : AbstractAction() {
             override fun actionPerformed(event: ActionEvent?) {
-                optionsPanel.toggleRegex()
+                searchField.toggleRegex()
             }
         })
     }

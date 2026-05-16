@@ -20,7 +20,6 @@ class LiveGrepOptionsPanelTest {
         assertTrue(options.followSymlinks)
         assertTrue(options.respectGitIgnore)
         assertTrue(options.smartCase)
-        assertEquals(LiveGrepQueryMode.WORDS, panel.currentQueryMode())
         assertEquals(emptyList<String>(), options.includeExtensions)
         assertEquals(listOf(".git"), options.excludePatterns)
     }
@@ -44,40 +43,6 @@ class LiveGrepOptionsPanelTest {
 
         assertEquals(listOf("kt"), panel.currentOptions().includeExtensions)
         assertEquals(1, changes)
-    }
-
-    @Test
-    fun togglesSmartCaseAndNotifiesChanges() {
-        var changes = 0
-        val panel = LiveGrepOptionsPanel()
-        panel.setOnOptionsChanged { changes++ }
-
-        panel.toggleSmartCase()
-
-        assertFalse(panel.currentOptions().smartCase)
-        assertEquals(1, changes)
-    }
-
-    @Test
-    fun togglesRegexModeAndNotifiesChanges() {
-        var changes = 0
-        val panel = LiveGrepOptionsPanel()
-        panel.setOnOptionsChanged { changes++ }
-
-        panel.toggleRegex()
-
-        assertEquals(LiveGrepQueryMode.REGEX, panel.currentQueryMode())
-        assertEquals(1, changes)
-    }
-
-    @Test
-    fun exposesMnemonicLabelAndTooltipText() {
-        val panel = LiveGrepOptionsPanel()
-
-        assertTrue(panel.smartCaseLabelText().contains("<u>c</u>"))
-        assertEquals("Alt+C", panel.smartCaseTooltipText())
-        assertTrue(panel.regexLabelText().contains("<u>R</u>"))
-        assertEquals("Alt+R", panel.regexTooltipText())
     }
 
     @Test

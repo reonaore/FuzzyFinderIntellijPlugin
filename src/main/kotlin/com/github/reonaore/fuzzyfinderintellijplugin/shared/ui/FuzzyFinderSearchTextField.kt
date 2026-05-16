@@ -2,6 +2,7 @@ package com.github.reonaore.fuzzyfinderintellijplugin.shared.ui
 
 import com.intellij.ui.DocumentAdapter
 import com.intellij.ui.SearchTextField
+import com.intellij.ui.components.JBTextField
 import javax.swing.event.DocumentEvent
 
 fun fuzzyFinderSearchTextField(
@@ -14,6 +15,14 @@ fun fuzzyFinderSearchTextField(
 
 fun SearchTextField.onTextChanged(onTextChanged: (event: DocumentEvent) -> Unit) {
     this.addDocumentListener(object : DocumentAdapter() {
+        override fun textChanged(e: DocumentEvent) {
+            onTextChanged(e)
+        }
+    })
+}
+
+fun JBTextField.onTextChanged(onTextChanged: (event: DocumentEvent) -> Unit) {
+    this.document.addDocumentListener(object : DocumentAdapter() {
         override fun textChanged(e: DocumentEvent) {
             onTextChanged(e)
         }
