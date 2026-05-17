@@ -43,29 +43,6 @@ class FuzzyFinderService(
         )
     }
 
-    fun candidateStream(options: FdSearchOptions): Flow<CandidateSearchUpdate> {
-        val basePath = project.basePath ?: return flowOf(
-            CandidateSearchUpdate(
-                totalCandidates = 0,
-                candidates = emptyList(),
-                isComplete = true,
-            ),
-        )
-
-        return searchEngine.candidateStream(
-            options = options,
-            root = Path.of(basePath),
-        )
-    }
-
-    suspend fun filterCandidates(query: String, candidates: List<Path>, limit: Int = MAX_RESULTS): List<Path> {
-        return searchEngine.filterCandidates(
-            query = query,
-            candidates = candidates,
-            limit = limit,
-        )
-    }
-
     fun grepStream(query: String, options: GrepSearchOptions): Flow<GrepSearchUpdate> {
         val basePath = project.basePath ?: return flowOf(
             GrepSearchUpdate(
