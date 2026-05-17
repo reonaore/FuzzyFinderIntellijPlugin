@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+### Added
+
+- Live Grep now supports a default word-search mode and a Regex toggle for raw `rg` patterns.
+
+### Changed
+
+- File Finder now streams candidates as they are discovered and shows hidden files by default.
+- Live Grep search options now live in the search field for faster access.
+
+### Fixed
+
+- File Finder no longer lets stale streamed results overwrite newer queries.
+
 ## [0.3.2] - 2026-05-13
 
 ### Added
@@ -90,7 +103,8 @@
 - Preview loading now runs off the EDT and ignores stale selection updates
 - User-visible strings are centralized in the resource bundle
 
-[Unreleased]: https://github.com/reonaore/FuzzyFinderIntellijPlugin/compare/0.3.2...HEAD
+[Unreleased]: https://github.com/reonaore/FuzzyFinderIntellijPlugin/compare/0.3.3...HEAD
+[0.3.3]: https://github.com/reonaore/FuzzyFinderIntellijPlugin/compare/0.3.2...0.3.3
 [0.3.2]: https://github.com/reonaore/FuzzyFinderIntellijPlugin/compare/0.3.1...0.3.2
 [0.3.1]: https://github.com/reonaore/FuzzyFinderIntellijPlugin/compare/0.3.0...0.3.1
 [0.3.0]: https://github.com/reonaore/FuzzyFinderIntellijPlugin/compare/0.2.2...0.3.0
