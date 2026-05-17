@@ -86,6 +86,73 @@ class FuzzyFinderSearchEngineTest {
     }
 
     @Test
+    fun candidateStreamEmitsPartialAndCompleteUpdates() = runBlocking {
+        val runner = RecordingCommandRunner(
+            outputs = listOf(
+                "/repo/a.txt\u0000/repo/b.txt\u0000".toByteArray(),
+            ),
+        )
+        val engine = FuzzyFinderSearchEngine(
+            fdExecutable = "fd",
+            fzfExecutable = "fzf",
+            rgExecutable = "rg",
+            runner = runner,
+        )
+
+        val updates = engine.candidateStream(
+            options = FdSearchOptions(),
+            root = Path.of("/repo"),
+        ).toList()
+
+        assertEquals(2, updates.last().totalCandidates)
+        assertEquals(true, updates.last().isComplete)
+        assertEquals(listOf(Path.of("/repo/a.txt"), Path.of("/repo/b.txt")), updates.last().candidates)
+        assertEquals(
+            CommandSpec(
+                executable = "fd",
+                parameters = buildFdParameters(FdSearchOptions(), Path.of("/repo")),
+            ),
+            runner.calls.single().command,
+        )
+    }
+
+    @Test
+    fun filterCandidatesSkipsFzfForBlankQueryAndLimitsResults() = runBlocking {
+        val runner = RecordingCommandRunner(outputs = emptyList())
+        val engine = FuzzyFinderSearchEngine("fd", "fzf", "rg", runner)
+        val candidates = listOf(Path.of("/repo/a.txt"), Path.of("/repo/b.txt"))
+
+        val result = engine.filterCandidates(" ", candidates, limit = 1)
+
+        assertEquals(listOf(Path.of("/repo/a.txt")), result)
+        assertEquals(0, runner.calls.size)
+    }
+
+    @Test
+    fun filterCandidatesRunsFzfAgainstCachedPaths() = runBlocking {
+        val runner = RecordingCommandRunner(
+            outputs = listOf("/repo/b.txt\u0000".toByteArray()),
+        )
+        val engine = FuzzyFinderSearchEngine("fd", "/usr/local/bin/fzf", "rg", runner)
+        val candidates = listOf(Path.of("/repo/a.txt"), Path.of("/repo/b.txt"))
+
+        val result = engine.filterCandidates("b", candidates)
+
+        assertEquals(listOf(Path.of("/repo/b.txt")), result)
+        assertEquals(
+            CommandSpec(
+                executable = "/usr/local/bin/fzf",
+                parameters = listOf("--filter", "b", "--scheme=path", "--read0", "--print0"),
+            ),
+            runner.calls.single().command,
+        )
+        assertEquals(
+            "/repo/a.txt\u0000/repo/b.txt\u0000",
+            runner.calls.single().stdin?.toString(StandardCharsets.UTF_8),
+        )
+    }
+
+    @Test
     fun passesQueryOptionsAndNoMatchCodeToRunner() = runBlocking {
         val options = FdSearchOptions(
             entryType = FdEntryType.DIRECTORIES,
@@ -400,6 +467,20 @@ class FuzzyFinderSearchEngineTest {
         ): ByteArray {
             calls += Invocation(command, stdin, noMatchExitCodes)
             return outputs[calls.lastIndex]
+        }
+
+        override fun streamRecords(
+            command: CommandSpec,
+            delimiter: Char,
+            stdin: ByteArray?,
+            noMatchExitCodes: Set<Int>,
+        ) = kotlinx.coroutines.flow.flow {
+            calls += Invocation(command, stdin, noMatchExitCodes)
+            outputs[calls.lastIndex]
+                .toString(StandardCharsets.UTF_8)
+                .split(delimiter)
+                .filter(String::isNotEmpty)
+                .forEach { emit(it) }
         }
     }
 }

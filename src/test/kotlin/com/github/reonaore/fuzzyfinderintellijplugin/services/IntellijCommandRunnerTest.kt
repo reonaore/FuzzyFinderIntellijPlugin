@@ -95,6 +95,26 @@ class IntellijCommandRunnerTest {
     }
 
     @Test
+    fun streamsNulDelimitedRecordsWhenProcessSucceeds() {
+        val process = FakeProcess(
+            stdout = "first\u0000second\u0000".toByteArray(),
+            stderr = ByteArray(0),
+            exitCode = 0,
+            waitResult = true,
+        )
+        val runner = IntellijCommandRunner(processFactory = { process })
+
+        val records = kotlinx.coroutines.runBlocking {
+            runner.streamRecords(
+                command = CommandSpec("fd", listOf("--print0")),
+                delimiter = '\u0000',
+            ).toList()
+        }
+
+        assertEquals(listOf("first", "second"), records)
+    }
+
+    @Test
     fun streamLinesThrowsWhenProcessStaysIdlePastTimeout() {
         val process = FakeProcess(
             stdout = ByteArray(0),

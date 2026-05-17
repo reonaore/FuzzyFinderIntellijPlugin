@@ -2,9 +2,9 @@ package com.github.reonaore.fuzzyfinderintellijplugin.filefinder
 
 import com.github.reonaore.fuzzyfinderintellijplugin.MyBundle
 import com.github.reonaore.fuzzyfinderintellijplugin.services.FdSearchOptions
+import com.github.reonaore.fuzzyfinderintellijplugin.services.CandidateSearchUpdate
 import com.github.reonaore.fuzzyfinderintellijplugin.services.FuzzyFinderException
 import com.github.reonaore.fuzzyfinderintellijplugin.services.FuzzyFinderService
-import com.github.reonaore.fuzzyfinderintellijplugin.services.SearchResult
 import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.FuzzyFinderPreviewLoader
 import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.PreviewContent
 import kotlinx.coroutines.CancellationException
@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import java.nio.file.Path
 
@@ -61,12 +62,19 @@ sealed interface FuzzyFinderPreviewState {
     ) : FuzzyFinderPreviewState
 }
 
+internal interface FuzzyFinderSearchBackend {
+    fun candidateStream(options: FdSearchOptions): Flow<CandidateSearchUpdate>
+
+    suspend fun filterCandidates(query: String, candidates: List<Path>): List<Path>
+
+    fun notifyError(message: String)
+}
+
 @OptIn(FlowPreview::class)
 class FuzzyFinderDialogViewModel internal constructor(
+    private val backend: FuzzyFinderSearchBackend,
     private val scope: CoroutineScope,
     initialOptions: FdSearchOptions,
-    private val runSearch: suspend (String, FdSearchOptions) -> SearchResult,
-    private val notifyError: (String) -> Unit,
     private val loadPreview: suspend (Path) -> PreviewContent,
 ) {
     constructor(
@@ -74,10 +82,9 @@ class FuzzyFinderDialogViewModel internal constructor(
         scope: CoroutineScope,
         initialOptions: FdSearchOptions,
     ) : this(
+        backend = FuzzyFinderServiceSearchBackend(service),
         scope = scope,
         initialOptions = initialOptions,
-        runSearch = service::search,
-        notifyError = service::notifyError,
         loadPreview = FuzzyFinderPreviewLoader()::load,
     )
 
@@ -89,16 +96,23 @@ class FuzzyFinderDialogViewModel internal constructor(
     )
     val state: StateFlow<FuzzyFinderDialogState> = _state.asStateFlow()
     private var previewJob: Job? = null
+    private var cachedCandidates: List<Path> = emptyList()
+    private var cachedOptions: FdSearchOptions? = null
+    private var isCandidateLoading = false
 
     init {
         scope.launch {
-            combine(
-                query.debounce(SEARCH_DEBOUNCE_MS),
-                options,
-            ) { latestQuery, latestOptions -> latestQuery to latestOptions }
+            options
+                .collectLatest { latestOptions ->
+                    collectCandidates(latestOptions)
+                }
+        }
+        scope.launch {
+            query
+                .debounce(SEARCH_DEBOUNCE_MS)
                 .distinctUntilChanged()
-                .collectLatest { (latestQuery, latestOptions) ->
-                    search(latestQuery, latestOptions)
+                .collectLatest { latestQuery ->
+                    search(latestQuery, options.value)
                 }
         }
     }
@@ -124,7 +138,64 @@ class FuzzyFinderDialogViewModel internal constructor(
         selectCandidate(currentIndex - 1)
     }
 
+    private suspend fun collectCandidates(options: FdSearchOptions) {
+        isCandidateLoading = true
+        cachedOptions = options
+        cachedCandidates = emptyList()
+        showSearching(query.value, options)
+        try {
+            backend.candidateStream(options).collect { update ->
+                cachedCandidates = update.candidates
+                val latestQuery = query.value
+                applySearchResult(
+                    query = latestQuery,
+                    options = options,
+                    results = filteredCandidates(latestQuery),
+                    totalCandidates = update.totalCandidates,
+                    isComplete = update.isComplete,
+                )
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            applyError(query.value, options, e)
+        } finally {
+            isCandidateLoading = false
+        }
+    }
+
     private suspend fun search(query: String, options: FdSearchOptions) {
+        if (cachedOptions != options) {
+            _state.value = _state.value.copy(
+                query = query,
+                options = options,
+                isSearching = isCandidateLoading,
+                hasError = false,
+            )
+            return
+        }
+
+        showSearching(query, options)
+        try {
+            applySearchResult(
+                query = query,
+                options = options,
+                results = filteredCandidates(query),
+                totalCandidates = cachedCandidates.size,
+                isComplete = !isCandidateLoading,
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            applyError(query, options, e)
+        }
+    }
+
+    private suspend fun filteredCandidates(query: String): List<Path> {
+        return backend.filterCandidates(query, cachedCandidates)
+    }
+
+    private fun showSearching(query: String, options: FdSearchOptions) {
         _state.value = _state.value.copy(
             query = query,
             options = options,
@@ -132,41 +203,43 @@ class FuzzyFinderDialogViewModel internal constructor(
             hasError = false,
             statusText = MyBundle.message("dialog.status.searching"),
         )
-
-        try {
-            applySearchResult(query, options, runSearch(query, options))
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Throwable) {
-            clearPreview()
-            _state.value = _state.value.copy(
-                query = query,
-                options = options,
-                isSearching = false,
-                hasError = true,
-                hasSearched = true,
-                paths = emptyList(),
-                selectedIndex = FuzzyFinderDialogState.NO_SELECTION,
-                selectedPath = null,
-                canOpenSelectedFile = false,
-                preview = FuzzyFinderPreviewState.Empty,
-                totalCandidates = 0,
-                statusText = MyBundle.message("dialog.status.error"),
-            )
-            val message = when (e) {
-                is FuzzyFinderException -> e.message
-                else -> e.localizedMessage
-            } ?: MyBundle.message("dialog.status.error")
-            notifyError(message)
-        }
     }
 
-    private fun applySearchResult(query: String, options: FdSearchOptions, searchResult: SearchResult) {
-        if (searchResult.results.isEmpty()) {
+    private fun applyError(query: String, options: FdSearchOptions, error: Throwable) {
+        clearPreview()
+        _state.value = _state.value.copy(
+            query = query,
+            options = options,
+            isSearching = false,
+            hasError = true,
+            hasSearched = true,
+            paths = emptyList(),
+            selectedIndex = FuzzyFinderDialogState.NO_SELECTION,
+            selectedPath = null,
+            canOpenSelectedFile = false,
+            preview = FuzzyFinderPreviewState.Empty,
+            totalCandidates = 0,
+            statusText = MyBundle.message("dialog.status.error"),
+        )
+        val message = when (error) {
+            is FuzzyFinderException -> error.message
+            else -> error.localizedMessage
+        } ?: MyBundle.message("dialog.status.error")
+        backend.notifyError(message)
+    }
+
+    private fun applySearchResult(
+        query: String,
+        options: FdSearchOptions,
+        results: List<Path>,
+        totalCandidates: Int,
+        isComplete: Boolean,
+    ) {
+        if (results.isEmpty()) {
             _state.value = _state.value.copy(
                 query = query,
                 options = options,
-                isSearching = false,
+                isSearching = !isComplete,
                 hasError = false,
                 hasSearched = true,
                 paths = emptyList(),
@@ -174,37 +247,45 @@ class FuzzyFinderDialogViewModel internal constructor(
                 selectedPath = null,
                 canOpenSelectedFile = false,
                 preview = FuzzyFinderPreviewState.Empty,
-                totalCandidates = searchResult.totalCandidates,
+                totalCandidates = totalCandidates,
                 statusText = MyBundle.message(
                     "dialog.status.resultsDetailed",
                     0,
-                    searchResult.totalCandidates,
+                    totalCandidates,
                 ),
             )
             loadSelectedPreview(null)
             return
         }
 
-        val selectedPath = searchResult.results.first()
+        val previousSelection = _state.value.selectedPath
+        val selectedPath = previousSelection?.takeIf(results::contains) ?: results.first()
+        val selectedIndex = results.indexOf(selectedPath)
         _state.value = _state.value.copy(
             query = query,
             options = options,
-            isSearching = false,
+            isSearching = !isComplete,
             hasError = false,
             hasSearched = true,
-            paths = searchResult.results,
-            selectedIndex = 0,
+            paths = results,
+            selectedIndex = selectedIndex,
             selectedPath = selectedPath,
             canOpenSelectedFile = true,
-            preview = previewStateFor(selectedPath),
-            totalCandidates = searchResult.totalCandidates,
+            preview = if (previousSelection == selectedPath) {
+                _state.value.preview
+            } else {
+                previewStateFor(selectedPath)
+            },
+            totalCandidates = totalCandidates,
             statusText = MyBundle.message(
                 "dialog.status.resultsDetailed",
-                searchResult.results.size,
-                searchResult.totalCandidates,
+                results.size,
+                totalCandidates,
             ),
         )
-        loadSelectedPreview(selectedPath)
+        if (previousSelection != selectedPath) {
+            loadSelectedPreview(selectedPath)
+        }
     }
 
     private fun selectCandidate(index: Int) {
@@ -259,5 +340,21 @@ class FuzzyFinderDialogViewModel internal constructor(
 
     private companion object {
         const val SEARCH_DEBOUNCE_MS = 180L
+    }
+}
+
+private class FuzzyFinderServiceSearchBackend(
+    private val service: FuzzyFinderService,
+) : FuzzyFinderSearchBackend {
+    override fun candidateStream(options: FdSearchOptions): Flow<CandidateSearchUpdate> {
+        return service.candidateStream(options)
+    }
+
+    override suspend fun filterCandidates(query: String, candidates: List<Path>): List<Path> {
+        return service.filterCandidates(query, candidates)
+    }
+
+    override fun notifyError(message: String) {
+        service.notifyError(message)
     }
 }

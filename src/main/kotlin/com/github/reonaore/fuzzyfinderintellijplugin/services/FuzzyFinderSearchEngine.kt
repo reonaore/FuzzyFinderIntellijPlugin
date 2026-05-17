@@ -45,6 +45,72 @@ class FuzzyFinderSearchEngine(
         )
     }
 
+    fun candidateStream(
+        options: FdSearchOptions,
+        root: Path,
+    ): Flow<CandidateSearchUpdate> {
+        return flow {
+            val candidates = mutableListOf<Path>()
+            var emittedCount = 0
+            var lastEmitAt = 0L
+
+            runner.streamRecords(
+                command = CommandSpec(
+                    executable = fdExecutable,
+                    parameters = buildFdParameters(options, root),
+                ),
+                delimiter = '\u0000',
+            ).collect { record ->
+                candidates.add(Path.of(record))
+
+                val now = System.nanoTime()
+                val shouldEmit = candidates.size == 1 ||
+                    candidates.size - emittedCount >= STREAM_BATCH_SIZE ||
+                    now - lastEmitAt >= STREAM_BATCH_INTERVAL_NANOS
+                if (shouldEmit) {
+                    emit(
+                        CandidateSearchUpdate(
+                            totalCandidates = candidates.size,
+                            candidates = candidates.toList(),
+                            isComplete = false,
+                        ),
+                    )
+                    emittedCount = candidates.size
+                    lastEmitAt = now
+                }
+            }
+
+            emit(
+                CandidateSearchUpdate(
+                    totalCandidates = candidates.size,
+                    candidates = candidates.toList(),
+                    isComplete = true,
+                ),
+            )
+        }
+    }
+
+    suspend fun filterCandidates(
+        query: String,
+        candidates: List<Path>,
+        limit: Int = MAX_RESULTS,
+    ): List<Path> {
+        if (query.isBlank()) {
+            return candidates.take(limit)
+        }
+
+        val stdout = runner.run(
+            command = CommandSpec(
+                executable = fzfExecutable,
+                parameters = listOf("--filter", query, "--scheme=path", "--read0", "--print0"),
+            ),
+            stdin = FuzzyFinderParsers.toNulSeparatedBytes(candidates),
+            noMatchExitCodes = setOf(FZF_NO_MATCH_EXIT_CODE),
+        )
+
+        return FuzzyFinderParsers.parseNulSeparatedPaths(stdout).take(limit)
+    }
+
     suspend fun grep(
         query: String,
         options: GrepSearchOptions,
