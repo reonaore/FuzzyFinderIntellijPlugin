@@ -32,6 +32,7 @@ class LiveGrepOptionsPanel {
         toolTipText = ALT_X_TOOLTIP
     }
     init {
+        includeHiddenCheckBox.isSelected = true
         followSymlinksCheckBox.isSelected = true
         respectGitIgnoreCheckBox.isSelected = true
         includeHiddenCheckBox.mnemonic = KeyEvent.VK_H

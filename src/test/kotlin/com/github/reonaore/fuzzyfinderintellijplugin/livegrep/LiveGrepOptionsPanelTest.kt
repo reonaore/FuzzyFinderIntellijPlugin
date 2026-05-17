@@ -16,7 +16,7 @@ class LiveGrepOptionsPanelTest {
         val panel = LiveGrepOptionsPanel()
         val options = panel.currentOptions()
 
-        assertFalse(options.includeHidden)
+        assertTrue(options.includeHidden)
         assertTrue(options.followSymlinks)
         assertTrue(options.respectGitIgnore)
         assertTrue(options.smartCase)

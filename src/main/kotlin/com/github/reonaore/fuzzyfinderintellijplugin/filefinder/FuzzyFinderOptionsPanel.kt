@@ -36,6 +36,7 @@ class FuzzyFinderOptionsPanel {
 
     init {
         typeComboBox.selectedItem = FdEntryType.FILES
+        includeHiddenCheckBox.isSelected = true
         followSymlinksCheckBox.isSelected = true
         respectGitIgnoreCheckBox.isSelected = true
         includeHiddenCheckBox.mnemonic = KeyEvent.VK_H
