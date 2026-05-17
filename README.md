@@ -12,8 +12,8 @@ Fuzzy Finder adds lightweight search dialogs to IntelliJ-based IDEs by combining
 
 The plugin opens modeless dialogs with:
 
-- incremental file search backed by `fzf --filter`
-- live grep backed by `rg` with smart-case regex matching
+- incremental file search backed by streamed `fd` candidates and `fzf --filter`
+- live grep backed by `rg` with word search by default and optional regex mode
 - a live file preview pane with syntax highlighting
 - filters for file type, hidden files, symlink handling, and ignore rules
 - `Cmd+F` on macOS or `Ctrl+F` on other platforms to refocus the search field
@@ -102,7 +102,7 @@ Leave fields blank to use `fd`, `fzf`, and `rg` from `PATH`.
 ### 4. Open dialogs
 
 - Open `Tools | Open Fuzzy Finder`, type a query, and press `Enter` to open the selected file.
-- Open `Tools | Open Live Grep`, type a ripgrep regex, and press `Enter` to open the selected match.
+- Open `Tools | Open Live Grep`, type words to search in order, and press `Enter` to open the selected match. Enable Regex mode when you want to enter a raw `rg` pattern.
 
 ## Shortcuts
 
@@ -122,7 +122,7 @@ Leave fields blank to use `fd`, `fzf`, and `rg` from `PATH`.
 | `Alt+H` | Fuzzy Finder | Toggle hidden files |
 | `Alt+S` | Fuzzy Finder | Toggle symlink following |
 | `Alt+G` | Fuzzy Finder | Toggle ignore rules |
-| `Alt+C` | Live Grep | Toggle smart-case matching |
+| Search field buttons | Live Grep | Toggle Regex and smart-case modes |
 | `Alt+E` | Finder / Live Grep | Focus extensions field |
 | `Alt+X` | Finder / Live Grep | Focus exclude field |
 
@@ -130,8 +130,8 @@ Leave fields blank to use `fd`, `fzf`, and `rg` from `PATH`.
 
 ### Search
 
-- Find project files quickly with `fd` and rank matches with `fzf --filter`
-- Search project text with `rg` and jump directly to matching lines
+- Find project files quickly as `fd` streams candidates and rank matches with `fzf --filter`
+- Search project text with word search by default, switch to Regex mode for raw `rg` patterns, and jump directly to matching lines
 - Scope searches to IntelliJ content roots in the current project
 
 ### Preview
@@ -142,7 +142,7 @@ Leave fields blank to use `fd`, `fzf`, and `rg` from `PATH`.
 ### Filters
 
 - Filter file results by file extension
-- Toggle hidden-file, symlink-following, and ignore-rule options
+- Hidden files are included by default; toggle hidden-file, symlink-following, and ignore-rule options per search
 - Apply fuzzy filtering to Live Grep results after `rg` regex search
 
 ### Configuration
@@ -154,8 +154,8 @@ Leave fields blank to use `fd`, `fzf`, and `rg` from `PATH`.
 - Finder and Live Grep dialogs use Flow-based ViewModels to keep UI state updates predictable.
 - Result panes include clearer loading and empty-result states.
 - Dialogs can refocus the search field quickly via keyboard (`Cmd+F` on macOS, `Ctrl+F` on other platforms).
-- File search supports file-extension filtering and consistent option-toggle behavior.
-- Live Grep supports smart-case toggle and post-search fuzzy filtering for fast narrowing.
+- File search supports file-extension filtering, streams candidates as they are discovered, and includes hidden files by default.
+- Live Grep supports word search by default, search-field buttons for Regex and smart-case modes, and post-search fuzzy filtering for fast narrowing.
 
 ## Troubleshooting
 
@@ -182,8 +182,8 @@ Leave fields blank to use `fd`, `fzf`, and `rg` from `PATH`.
 
 ### Live Grep results are unexpected
 
-- Live Grep query syntax follows `rg` regex behavior.
-- Toggle `Alt+C` to switch smart-case behavior and compare results.
+- Live Grep uses word search by default. Enable Regex mode in the search field when you want raw `rg` syntax.
+- Toggle smart-case in the search field and compare results when matches differ from expectations.
 
 ## Notes
 
