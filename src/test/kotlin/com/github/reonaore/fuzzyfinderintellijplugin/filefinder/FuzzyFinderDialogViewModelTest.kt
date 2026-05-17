@@ -163,6 +163,66 @@ class FuzzyFinderDialogViewModelTest {
     }
 
     @Test
+    fun ignoresStaleStreamedResultsWhenQueryChangesDuringFiltering() = runBlocking {
+        val oldPath = Path.of("/tmp/old.txt")
+        val newPath = Path.of("/tmp/new.txt")
+        val emitCandidates = CompletableDeferred<Unit>()
+        val oldFilterStarted = CompletableDeferred<Unit>()
+        val oldFilterCanFinish = CompletableDeferred<Unit>()
+        val oldFilterFinished = CompletableDeferred<Unit>()
+        val viewModel = FuzzyFinderDialogViewModel(
+            backend = TestFuzzyFinderSearchBackend(
+                streamCandidates = {
+                    flow {
+                        emitCandidates.await()
+                        emit(CandidateSearchUpdate(1, listOf(Path.of("/tmp/candidate.txt")), false))
+                        awaitCancellation()
+                    }
+                },
+                filterCandidatesAction = { query, _ ->
+                    when (query) {
+                        "old" -> {
+                            oldFilterStarted.complete(Unit)
+                            oldFilterCanFinish.await()
+                            oldFilterFinished.complete(Unit)
+                            listOf(oldPath)
+                        }
+
+                        "new" -> listOf(newPath)
+                        else -> emptyList()
+                    }
+                },
+            ),
+            scope = CoroutineScope(Job() + Dispatchers.Default),
+            initialOptions = FdSearchOptions(),
+            loadPreview = { path -> PreviewContent(path.toString(), null) },
+        )
+
+        viewModel.onUpdateQuery("old")
+        emitCandidates.complete(Unit)
+
+        withTimeout(TEST_TIMEOUT_MS) {
+            oldFilterStarted.await()
+        }
+
+        viewModel.onUpdateQuery("new")
+
+        withTimeout(TEST_TIMEOUT_MS) {
+            waitUntil { viewModel.state.value.query == "new" && viewModel.state.value.selectedPath == newPath }
+        }
+
+        oldFilterCanFinish.complete(Unit)
+
+        withTimeout(TEST_TIMEOUT_MS) {
+            oldFilterFinished.await()
+        }
+
+        delay(50)
+        assertEquals("new", viewModel.state.value.query)
+        assertEquals(newPath, viewModel.state.value.selectedPath)
+    }
+
+    @Test
     fun clampsCandidateSelectionWithinResultRange() = runBlocking {
         val firstPath = Path.of("/tmp/first.txt")
         val secondPath = Path.of("/tmp/second.txt")

@@ -14,7 +14,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -147,10 +146,14 @@ class FuzzyFinderDialogViewModel internal constructor(
             backend.candidateStream(options).collect { update ->
                 cachedCandidates = update.candidates
                 val latestQuery = query.value
+                val results = filteredCandidates(latestQuery)
+                if (query.value != latestQuery || cachedOptions != options) {
+                    return@collect
+                }
                 applySearchResult(
                     query = latestQuery,
                     options = options,
-                    results = filteredCandidates(latestQuery),
+                    results = results,
                     totalCandidates = update.totalCandidates,
                     isComplete = update.isComplete,
                 )
