@@ -49,7 +49,7 @@ data class PreviewHighlightRange(
 
 data class FdSearchOptions(
     val entryType: FdEntryType = FdEntryType.FILES,
-    val includeHidden: Boolean = false,
+    val includeHidden: Boolean = true,
     val followSymlinks: Boolean = true,
     val respectGitIgnore: Boolean = true,
     val includeExtensions: List<String> = emptyList(),
@@ -57,7 +57,7 @@ data class FdSearchOptions(
 )
 
 data class GrepSearchOptions(
-    val includeHidden: Boolean = false,
+    val includeHidden: Boolean = true,
     val followSymlinks: Boolean = true,
     val respectGitIgnore: Boolean = true,
     val includeExtensions: List<String> = emptyList(),

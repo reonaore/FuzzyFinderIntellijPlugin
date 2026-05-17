@@ -319,7 +319,18 @@ class FuzzyFinderSearchEngineTest {
         assertEquals(
             CommandSpec(
                 executable = "rg",
-                parameters = listOf("--json", "--line-buffered", "--smart-case", "--follow", "--glob", "!.git", "--", "needle", "/repo"),
+                parameters = listOf(
+                    "--json",
+                    "--line-buffered",
+                    "--smart-case",
+                    "--hidden",
+                    "--follow",
+                    "--glob",
+                    "!.git",
+                    "--",
+                    "needle",
+                    "/repo",
+                ),
             ),
             runner.calls.single().command,
         )

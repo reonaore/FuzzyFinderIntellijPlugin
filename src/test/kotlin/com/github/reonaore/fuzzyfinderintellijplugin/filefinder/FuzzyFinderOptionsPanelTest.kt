@@ -17,11 +17,11 @@ class FuzzyFinderOptionsPanelTest {
         var changes = 0
         val panel = FuzzyFinderOptionsPanel().apply { setOnOptionsChanged { changes++ } }
 
-        assertFalse(panel.currentOptions().includeHidden)
+        assertTrue(panel.currentOptions().includeHidden)
 
         panel.toggleIncludeHidden()
 
-        assertTrue(panel.currentOptions().includeHidden)
+        assertFalse(panel.currentOptions().includeHidden)
         assertEquals(1, changes)
     }
 

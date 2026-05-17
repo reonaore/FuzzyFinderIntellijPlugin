@@ -47,6 +47,7 @@ class FuzzyFinderSearchModelsTest {
             listOf(
                 "--type", "f",
                 "--absolute-path",
+                "--hidden",
                 "--follow",
                 "--exclude", ".git",
                 "--print0", ".", "/repo",
@@ -100,6 +101,7 @@ class FuzzyFinderSearchModelsTest {
             listOf(
                 "--json",
                 "--smart-case",
+                "--hidden",
                 "--follow",
                 "--glob", "!.git",
                 "--",
