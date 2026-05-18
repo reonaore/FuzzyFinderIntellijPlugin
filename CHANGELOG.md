@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-05-18
+
 ### Added
 
 - Live Grep now supports a default word-search mode and a Regex toggle for raw `rg` patterns.
