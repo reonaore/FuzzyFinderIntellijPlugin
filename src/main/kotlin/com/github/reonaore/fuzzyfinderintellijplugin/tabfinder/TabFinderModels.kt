@@ -1,8 +1,6 @@
 package com.github.reonaore.fuzzyfinderintellijplugin.tabfinder
 
 import com.github.reonaore.fuzzyfinderintellijplugin.services.TextRange
-import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.contiguousHighlightRanges
-import com.github.reonaore.fuzzyfinderintellijplugin.filefinder.fuzzyMatchIndexes
 import com.intellij.openapi.vfs.VirtualFile
 import java.nio.file.Path
 
@@ -33,13 +31,6 @@ internal fun VirtualFile.toOpenTabCandidate(basePath: String?): OpenTabCandidate
             .filter(String::isNotBlank)
             .distinct()
             .joinToString(" "),
-    )
-}
-
-internal fun OpenTabCandidate.toTabListItem(query: String): TabListItem {
-    return TabListItem(
-        candidate = this,
-        highlightRanges = contiguousHighlightRanges(fuzzyMatchIndexes(fileName, query).toSet()),
     )
 }
 

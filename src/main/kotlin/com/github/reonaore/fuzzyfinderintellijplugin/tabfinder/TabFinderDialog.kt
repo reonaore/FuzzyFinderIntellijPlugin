@@ -1,7 +1,9 @@
 package com.github.reonaore.fuzzyfinderintellijplugin.tabfinder
 
 import com.github.reonaore.fuzzyfinderintellijplugin.MyBundle
+import com.github.reonaore.fuzzyfinderintellijplugin.filefinder.fuzzyMatchIndexes
 import com.github.reonaore.fuzzyfinderintellijplugin.services.FuzzyFinderService
+import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.contiguousHighlightRanges
 import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.fuzzyFinderSearchTextField
 import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.onTextChanged
 import com.intellij.openapi.application.EDT
@@ -228,4 +230,11 @@ private class FuzzyFinderTabSearchBackend(
     override fun notifyError(message: String) {
         service.notifyError(message)
     }
+}
+
+private fun OpenTabCandidate.toTabListItem(query: String): TabListItem {
+    return TabListItem(
+        candidate = this,
+        highlightRanges = contiguousHighlightRanges(fuzzyMatchIndexes(fileName, query).toSet()),
+    )
 }

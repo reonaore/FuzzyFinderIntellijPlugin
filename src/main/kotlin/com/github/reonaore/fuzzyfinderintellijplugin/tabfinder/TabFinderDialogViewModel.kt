@@ -37,7 +37,7 @@ internal interface TabFinderBackend {
 @OptIn(FlowPreview::class)
 class TabFinderDialogViewModel internal constructor(
     private val backend: TabFinderBackend,
-    private val scope: CoroutineScope,
+    scope: CoroutineScope,
 ) {
     private val query = MutableStateFlow("")
     private val openTabs = MutableStateFlow<List<OpenTabCandidate>>(emptyList())
