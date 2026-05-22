@@ -137,7 +137,12 @@ class TabFinderDialog(
     }
 
     private fun render(state: TabFinderDialogState) {
-        val items = state.candidates.map { it.toTabListItem(state.query) }
+        val items = state.candidates.map { candidate ->
+            TabListItem(
+                candidate = candidate,
+                highlightRanges = contiguousHighlightRanges(fuzzyMatchIndexes(candidate.fileName, state.query).toSet()),
+            )
+        }
         isRenderingState = true
         try {
             resultModel.replaceAll(items)
@@ -230,11 +235,4 @@ private class FuzzyFinderTabSearchBackend(
     override fun notifyError(message: String) {
         service.notifyError(message)
     }
-}
-
-private fun OpenTabCandidate.toTabListItem(query: String): TabListItem {
-    return TabListItem(
-        candidate = this,
-        highlightRanges = contiguousHighlightRanges(fuzzyMatchIndexes(fileName, query).toSet()),
-    )
 }
