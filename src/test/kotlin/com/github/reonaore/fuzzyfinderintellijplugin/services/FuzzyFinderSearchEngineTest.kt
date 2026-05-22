@@ -153,6 +153,35 @@ class FuzzyFinderSearchEngineTest {
     }
 
     @Test
+    fun filterIndexedRecordsRestoresMatchingIndexes() = runBlocking {
+        val runner = RecordingCommandRunner(
+            outputs = listOf("1\tReadme.md docs/README.md\u0000".toByteArray()),
+        )
+        val engine = FuzzyFinderSearchEngine("fd", "/usr/local/bin/fzf", "rg", runner)
+
+        val result = engine.filterIndexedRecords(
+            query = "read",
+            displayTexts = listOf("App.kt src/App.kt", "Readme.md docs/README.md"),
+        )
+
+        assertEquals(listOf(1), result)
+        assertEquals(
+            CommandSpec(
+                executable = "/usr/local/bin/fzf",
+                parameters = listOf(
+                    "--filter", "read",
+                    "--scheme=path",
+                    "--read0",
+                    "--print0",
+                    "--delimiter", "\t",
+                    "--with-nth", "2..",
+                ),
+            ),
+            runner.calls.single().command,
+        )
+    }
+
+    @Test
     fun passesQueryOptionsAndNoMatchCodeToRunner() = runBlocking {
         val options = FdSearchOptions(
             entryType = FdEntryType.DIRECTORIES,

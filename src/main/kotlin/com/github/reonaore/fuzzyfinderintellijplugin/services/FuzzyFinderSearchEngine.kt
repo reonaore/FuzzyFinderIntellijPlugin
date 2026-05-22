@@ -231,6 +231,34 @@ class FuzzyFinderSearchEngine(
             .take(limit)
     }
 
+    suspend fun filterIndexedRecords(
+        query: String,
+        displayTexts: List<String>,
+        limit: Int = MAX_RESULTS,
+    ): List<Int> {
+        if (query.isBlank()) {
+            return displayTexts.indices.take(limit)
+        }
+
+        val stdout = runner.run(
+            command = CommandSpec(
+                executable = fzfExecutable,
+                parameters = listOf(
+                    "--filter", query,
+                    "--scheme=path",
+                    "--read0",
+                    "--print0",
+                    "--delimiter", "\t",
+                    "--with-nth", "2..",
+                ),
+            ),
+            stdin = toIndexedDisplayRecords(displayTexts),
+            noMatchExitCodes = setOf(FZF_NO_MATCH_EXIT_CODE),
+        )
+
+        return parseFilteredIndexes(stdout).take(limit)
+    }
+
     private fun toIndexedGrepMatchRecords(matches: List<GrepMatch>, root: Path): ByteArray {
         if (matches.isEmpty()) {
             return ByteArray(0)
@@ -246,12 +274,31 @@ class FuzzyFinderSearchEngine(
         }.toByteArray(StandardCharsets.UTF_8)
     }
 
+    private fun toIndexedDisplayRecords(displayTexts: List<String>): ByteArray {
+        if (displayTexts.isEmpty()) {
+            return ByteArray(0)
+        }
+
+        return buildString {
+            displayTexts.forEachIndexed { index, displayText ->
+                append(index)
+                append('\t')
+                append(displayText)
+                append('\u0000')
+            }
+        }.toByteArray(StandardCharsets.UTF_8)
+    }
+
     private fun grepMatchDisplayText(match: GrepMatch, root: Path): String {
         val displayPath = runCatching { root.relativize(match.path).toString() }.getOrDefault(match.path.toString())
         return "$displayPath:${match.line}:${match.column}: ${match.lineText}"
     }
 
     private fun parseFilteredGrepMatchIndexes(stdout: ByteArray): List<Int> {
+        return parseFilteredIndexes(stdout)
+    }
+
+    private fun parseFilteredIndexes(stdout: ByteArray): List<Int> {
         if (stdout.isEmpty()) {
             return emptyList()
         }
