@@ -120,9 +120,9 @@ class FuzzyFinderOptionsPanelTest {
         val panel = FuzzyFinderOptionsPanel()
 
         assertNotNull(panel.includeHiddenTooltipText())
-        assertEquals("Alt+H", panel.includeHiddenTooltipText())
-        assertEquals("Alt+S", panel.followSymlinksTooltipText())
-        assertEquals("Alt+G", panel.respectGitIgnoreTooltipText())
+        assertEquals("Include hidden files. Alt+H", panel.includeHiddenTooltipText())
+        assertEquals("Follow symbolic links while searching. Alt+S", panel.followSymlinksTooltipText())
+        assertEquals("Respect .gitignore and other ignore files. Alt+G", panel.respectGitIgnoreTooltipText())
     }
 
     @Test
