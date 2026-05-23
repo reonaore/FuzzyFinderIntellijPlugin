@@ -5,7 +5,6 @@ import com.github.reonaore.fuzzyfinderintellijplugin.services.FuzzyFinderService
 import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.CandidateListLoadingPanel
 import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.FuzzyFinderPreview
 import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.PreviewContent
-import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.contiguousHighlightRanges
 import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.fuzzyFinderSearchTextField
 import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.onTextChanged
 import com.intellij.openapi.application.EDT
@@ -33,7 +32,6 @@ import java.awt.BorderLayout
 import java.awt.Dimension
 import java.awt.event.ActionEvent
 import java.awt.event.KeyEvent
-import java.nio.file.Path
 import javax.swing.AbstractAction
 import javax.swing.Action
 import javax.swing.JComponent
@@ -264,19 +262,4 @@ class FuzzyFinderDialog(private val project: Project) : DialogWrapper(project, f
         const val ACTION_TOGGLE_RESPECT_GITIGNORE = "fuzzyFinder.toggleRespectGitIgnore"
         val MENU_SHORTCUT_KEY_MASK = if (SystemInfo.isMac) KeyEvent.META_DOWN_MASK else KeyEvent.CTRL_DOWN_MASK
     }
-}
-
-@Suppress("unused")
-private fun Path.toFileListItem(basePath: String?, query: String): FileListItem {
-    val relativePath = relativePathFrom(basePath)
-    val fileName = fileName?.toString().orEmpty().ifBlank { relativePath }
-    val secondaryPath = relativeParentPath(basePath)
-
-    return FileListItem(
-        path = this,
-        fileName = fileName,
-        secondaryPath = secondaryPath,
-        highlightRanges = contiguousHighlightRanges(fuzzyMatchIndexes(fileName, query).toSet()),
-        icon = fileIcon(),
-    )
 }

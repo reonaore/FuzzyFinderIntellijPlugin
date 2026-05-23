@@ -41,8 +41,72 @@ class FuzzyFinderFileListTest {
     }
 
     @Test
-    fun ignoresWhitespaceInQueryWhenHighlighting() {
+    fun returnsExpandedRangeForShortFuzzyGap() {
+        assertEquals(
+            listOf(TextRange(0, 6)),
+            highlightRangesFor("FooBar.kt", "fobar"),
+        )
+    }
+
+    @Test
+    fun highlightsTokensIndependentlyWhenQueryOrderChanges() {
+        assertEquals(
+            listOf(TextRange(0, 6)),
+            highlightRangesFor("FooBarService.kt", "bar foo"),
+        )
+    }
+
+    @Test
+    fun highlightsTokensIndependentlyWhenQueryOrderMatchesText() {
+        assertEquals(
+            listOf(TextRange(0, 6)),
+            highlightRangesFor("FooBarService.kt", "foo bar"),
+        )
+    }
+
+    @Test
+    fun fallsBackToFuzzyCharacterRangesForLargeGaps() {
+        assertEquals(
+            listOf(TextRange(0, 2), TextRange(13, 14)),
+            highlightRangesFor("application.py", "apy"),
+        )
+    }
+
+    @Test
+    fun returnsEmptyRangesForWhitespaceQuery() {
+        assertEquals(emptyList<TextRange>(), highlightRangesFor("App.kt", "   "))
+    }
+
+    @Test
+    fun preservesEscapedSpacesWhenTokenizingQuery() {
+        assertEquals(listOf("foo bar", "baz"), highlightTokens("foo\\ bar baz"))
+    }
+
+    @Test
+    fun highlightsEscapedSpaceAsLiteralSpaceInToken() {
+        assertEquals(
+            listOf(TextRange(0, 7)),
+            highlightRangesFor("foo bar.kt", "foo\\ bar"),
+        )
+    }
+
+    @Test
+    fun doesNotSplitEscapedSpaceTokenIntoPartialMatches() {
+        assertEquals(emptyList<TextRange>(), highlightRangesFor("bar.kt", "foo\\ bar"))
+    }
+
+    @Test
+    fun highlightsMatchingTokensWhenOtherTokensMatchAnotherPathPart() {
+        val item = Path.of("/repo/src/main/App.kt").toFileListItem("/repo", "src app")
+
+        assertEquals(listOf(TextRange(0, 3)), item.fileNameHighlightRanges)
+        assertEquals(listOf(TextRange(0, 3)), item.secondaryPathHighlightRanges)
+    }
+
+    @Test
+    fun tokenizesWhitespaceWhenHighlighting() {
         assertEquals(listOf(0, 1), fuzzyMatchIndexes("App.kt", "a p"))
+        assertEquals(listOf(TextRange(0, 2)), highlightRangesFor("App.kt", "a p"))
     }
 
     @Test
