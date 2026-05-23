@@ -4,6 +4,14 @@
 
 ## [Unreleased]
 
+### Added
+
+- Open Tab Finder can now filter and switch between currently open editor tabs.
+
+### Changed
+
+- File Finder candidate highlighting now matches `fzf` results more accurately.
+
 ## [0.3.3] - 2026-05-18
 
 ### Added
