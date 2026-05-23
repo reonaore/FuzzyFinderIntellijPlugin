@@ -14,6 +14,7 @@ The plugin opens modeless dialogs with:
 
 - incremental file search backed by streamed `fd` candidates and `fzf --filter`
 - live grep backed by `rg` with word search by default and optional regex mode
+- fuzzy switching across currently open tabs
 - a live file preview pane with syntax highlighting
 - filters for file type, hidden files, symlink handling, and ignore rules
 - `Cmd+F` on macOS or `Ctrl+F` on other platforms to refocus the search field
@@ -103,10 +104,11 @@ Leave fields blank to use `fd`, `fzf`, and `rg` from `PATH`.
 
 - Open `Tools | Open Fuzzy Finder`, type a query, and press `Enter` to open the selected file.
 - Open `Tools | Open Live Grep`, type words to search in order, and press `Enter` to open the selected match. Enable Regex mode when you want to enter a raw `rg` pattern.
+- Open `Tools | Open Tab Finder`, type a query, and press `Enter` to activate the selected open tab.
 
 ## Shortcuts
 
-### Common shortcuts (Fuzzy Finder and Live Grep)
+### Common shortcuts (Fuzzy Finder, Live Grep, and Open Tab Finder)
 
 | Shortcut | Action |
 | --- | --- |
@@ -132,6 +134,7 @@ Leave fields blank to use `fd`, `fzf`, and `rg` from `PATH`.
 
 - Find project files quickly as `fd` streams candidates and rank matches with `fzf --filter`
 - Search project text with word search by default, switch to Regex mode for raw `rg` patterns, and jump directly to matching lines
+- Switch between currently open tabs with fuzzy matching over file names and paths
 - Scope searches to IntelliJ content roots in the current project
 
 ### Preview

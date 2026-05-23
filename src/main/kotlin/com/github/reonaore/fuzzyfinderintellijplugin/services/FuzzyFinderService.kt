@@ -94,6 +94,14 @@ class FuzzyFinderService(
         )
     }
 
+    suspend fun filterIndexedRecords(query: String, displayTexts: List<String>, limit: Int = MAX_RESULTS): List<Int> {
+        return searchEngine.filterIndexedRecords(
+            query = query,
+            displayTexts = displayTexts,
+            limit = limit,
+        )
+    }
+
     fun notifyError(message: String) {
         NotificationGroupManager.getInstance()
             .getNotificationGroup("Fuzzy Finder Notifications")
