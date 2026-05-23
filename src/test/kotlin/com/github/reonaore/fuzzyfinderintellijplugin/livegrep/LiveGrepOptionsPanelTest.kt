@@ -66,6 +66,15 @@ class LiveGrepOptionsPanelTest {
     }
 
     @Test
+    fun checkboxTooltipsExplainScopeOptionsAndShortcuts() {
+        val panel = LiveGrepOptionsPanel()
+
+        assertEquals("Include hidden files. Alt+H", panel.includeHiddenTooltipText())
+        assertEquals("Follow symbolic links while searching. Alt+S", panel.followSymlinksTooltipText())
+        assertEquals("Respect .gitignore and other ignore files. Alt+G", panel.respectGitIgnoreTooltipText())
+    }
+
+    @Test
     fun placesFilterFieldsAboveScopeCheckboxes() {
         val panel = LiveGrepOptionsPanel()
         val component = panel.component() as JPanel

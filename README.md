@@ -138,6 +138,7 @@ Leave fields blank to use `fd`, `fzf`, and `rg` from `PATH`.
 - Scope searches to IntelliJ content roots in the current project
 - Filter file results by file extension
 - Hidden files are included by default; toggle hidden-file, symlink-following, and ignore-rule options per search
+- The `.gitignore` option is enabled by default, so File Finder respects `.gitignore` and other ignore files; turn it off to include ignored files
 - Preview the current selection with syntax highlighting without leaving the dialog
 
 ### Live Grep
@@ -145,6 +146,7 @@ Leave fields blank to use `fd`, `fzf`, and `rg` from `PATH`.
 - Search project text with word search by default
 - Switch to Regex mode for raw `rg` patterns
 - Narrow grep results with `fzf` fuzzy filtering after the `rg` search
+- The `.gitignore` option is enabled by default, so Live Grep respects `.gitignore` and other ignore files; turn it off to include ignored files
 - Jump directly to matching lines
 - Preview matching files with syntax-highlighted result highlights
 
@@ -189,6 +191,7 @@ Leave fields blank to use `fd`, `fzf`, and `rg` from `PATH`.
 ### No results appear in Fuzzy Finder
 
 - Check whether hidden/ignore/symlink toggles are narrowing results unexpectedly.
+- If the target file is ignored by `.gitignore`, turn off the `.gitignore` option in the dialog to include ignored files.
 - Confirm you are searching under project content roots (the plugin is scoped to IntelliJ content roots).
 
 ### Live Grep results are unexpected

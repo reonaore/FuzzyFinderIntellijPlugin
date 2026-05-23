@@ -122,6 +122,12 @@ class LiveGrepOptionsPanel {
 
     internal fun includeHiddenComponent(): JComponent = includeHiddenCheckBox
 
+    internal fun includeHiddenTooltipText(): String? = includeHiddenCheckBox.toolTipText
+
+    internal fun followSymlinksTooltipText(): String? = followSymlinksCheckBox.toolTipText
+
+    internal fun respectGitIgnoreTooltipText(): String? = respectGitIgnoreCheckBox.toolTipText
+
     internal fun extensionsLabelText(): String = extensionsLabel.text
 
     internal fun extensionsLabelMnemonic(): Int = extensionsLabel.displayedMnemonic
@@ -144,9 +150,9 @@ class LiveGrepOptionsPanel {
 
     private companion object {
         const val DEFAULT_EXCLUDES = ".git"
-        const val ALT_H_TOOLTIP = "Alt+H"
-        const val ALT_S_TOOLTIP = "Alt+S"
-        const val ALT_G_TOOLTIP = "Alt+G"
+        const val ALT_H_TOOLTIP = "Include hidden files. Alt+H"
+        const val ALT_S_TOOLTIP = "Follow symbolic links while searching. Alt+S"
+        const val ALT_G_TOOLTIP = "Respect .gitignore and other ignore files. Alt+G"
         const val ALT_E_TOOLTIP = "Alt+E"
         const val ALT_X_TOOLTIP = "Alt+X"
     }
