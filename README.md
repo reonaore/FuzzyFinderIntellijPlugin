@@ -14,17 +14,19 @@ The plugin opens modeless dialogs with:
 
 - incremental file search backed by streamed `fd` candidates and `fzf --filter`
 - live grep backed by `rg` with word search by default and optional regex mode
-- fuzzy switching across currently open tabs
-- a live file preview pane with syntax highlighting
+- tab switching backed by `fzf` fuzzy filtering over currently open files
+- a live file preview pane with syntax highlighting in file and grep results
 - filters for file type, hidden files, symlink handling, and ignore rules
 - `Cmd+F` on macOS or `Ctrl+F` on other platforms to refocus the search field
 - configurable executable paths for `fd`, `fzf`, and `rg`
 - project-root aware search scoped to IntelliJ content roots
+<!-- Plugin description end -->
+
+## Screenshots
 
 ![Fuzzy Finder search dialog](https://raw.githubusercontent.com/reonaore/FuzzyFinderIntellijPlugin/main/assets/fuzzy-file-finder-preview.png)
 
 ![Live Grep search dialog](https://raw.githubusercontent.com/reonaore/FuzzyFinderIntellijPlugin/main/assets/live-grep-preview.png)
-<!-- Plugin description end -->
 
 ## Requirements
 
@@ -130,23 +132,28 @@ Leave fields blank to use `fd`, `fzf`, and `rg` from `PATH`.
 
 ## Feature Overview
 
-### Search
+### File Finder
 
 - Find project files quickly as `fd` streams candidates and rank matches with `fzf --filter`
-- Search project text with word search by default, switch to Regex mode for raw `rg` patterns, and jump directly to matching lines
-- Switch between currently open tabs with fuzzy matching over file names and paths
 - Scope searches to IntelliJ content roots in the current project
-
-### Preview
-
-- Preview the current selection without leaving the dialog
-- Show syntax-highlighted previews for text files
-
-### Filters
-
 - Filter file results by file extension
 - Hidden files are included by default; toggle hidden-file, symlink-following, and ignore-rule options per search
-- Apply fuzzy filtering to Live Grep results after `rg` regex search
+- Preview the current selection with syntax highlighting without leaving the dialog
+
+### Live Grep
+
+- Search project text with word search by default
+- Switch to Regex mode for raw `rg` patterns
+- Narrow grep results with `fzf` fuzzy filtering after the `rg` search
+- Jump directly to matching lines
+- Preview matching files with syntax-highlighted result highlights
+
+### Tab Finder
+
+- Switch between currently open editor tabs from `Tools | Open Tab Finder`
+- Filter open tabs with `fzf` over file names and project-relative paths
+- Keep the tab list up to date as files are opened, closed, or selected
+- Activate the selected tab with `Enter` or double-click
 
 ### Configuration
 
@@ -159,6 +166,7 @@ Leave fields blank to use `fd`, `fzf`, and `rg` from `PATH`.
 - Dialogs can refocus the search field quickly via keyboard (`Cmd+F` on macOS, `Ctrl+F` on other platforms).
 - File search supports file-extension filtering, streams candidates as they are discovered, and includes hidden files by default.
 - Live Grep supports word search by default, search-field buttons for Regex and smart-case modes, and post-search fuzzy filtering for fast narrowing.
+- Tab Finder refreshes its candidates from currently open editor tabs and uses the same result navigation shortcuts as the other dialogs.
 
 ## Troubleshooting
 
