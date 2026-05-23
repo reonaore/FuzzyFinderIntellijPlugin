@@ -13,6 +13,7 @@
 ### Changed
 
 - File Finder candidate highlighting now matches `fzf` results more accurately.
+- Search option labels now clarify whether ignore files are respected.
 
 ## [0.3.3] - 2026-05-18
 
