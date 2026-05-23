@@ -90,9 +90,7 @@ internal fun fuzzyMatchIndexes(text: String, query: String): List<Int> {
 internal fun highlightRangesFor(text: String, query: String): List<TextRange> {
     if (text.isEmpty()) return emptyList()
 
-    val tokens = query.trim()
-        .split(Regex("\\s+"))
-        .filter(String::isNotEmpty)
+    val tokens = highlightTokens(query)
     if (tokens.isEmpty()) return emptyList()
 
     val ranges = tokens
@@ -100,6 +98,44 @@ internal fun highlightRangesFor(text: String, query: String): List<TextRange> {
             highlightRangesForToken(text, token)
         }
     return mergeHighlightRanges(ranges)
+}
+
+internal fun highlightTokens(query: String): List<String> {
+    val tokens = mutableListOf<String>()
+    val token = StringBuilder()
+    var isEscaping = false
+
+    fun flushToken() {
+        if (token.isNotEmpty()) {
+            tokens += token.toString()
+            token.clear()
+        }
+    }
+
+    query.forEach { char ->
+        if (isEscaping) {
+            if (char.isWhitespace()) {
+                token.append(char)
+            } else {
+                token.append('\\')
+                token.append(char)
+            }
+            isEscaping = false
+            return@forEach
+        }
+
+        when {
+            char == '\\' -> isEscaping = true
+            char.isWhitespace() -> flushToken()
+            else -> token.append(char)
+        }
+    }
+
+    if (isEscaping) {
+        token.append('\\')
+    }
+    flushToken()
+    return tokens
 }
 
 private fun highlightRangesForToken(text: String, token: String): List<TextRange> {

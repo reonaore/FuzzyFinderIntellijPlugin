@@ -78,6 +78,24 @@ class FuzzyFinderFileListTest {
     }
 
     @Test
+    fun preservesEscapedSpacesWhenTokenizingQuery() {
+        assertEquals(listOf("foo bar", "baz"), highlightTokens("foo\\ bar baz"))
+    }
+
+    @Test
+    fun highlightsEscapedSpaceAsLiteralSpaceInToken() {
+        assertEquals(
+            listOf(TextRange(0, 7)),
+            highlightRangesFor("foo bar.kt", "foo\\ bar"),
+        )
+    }
+
+    @Test
+    fun doesNotSplitEscapedSpaceTokenIntoPartialMatches() {
+        assertEquals(emptyList<TextRange>(), highlightRangesFor("bar.kt", "foo\\ bar"))
+    }
+
+    @Test
     fun highlightsMatchingTokensWhenOtherTokensMatchAnotherPathPart() {
         val item = Path.of("/repo/src/main/App.kt").toFileListItem("/repo", "src app")
 
