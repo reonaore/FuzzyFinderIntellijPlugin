@@ -133,6 +133,7 @@ class LiveGrepDialogViewModel internal constructor(
     private var cachedQueryMode: LiveGrepQueryMode? = null
     private var cachedRgOptions: GrepSearchOptions? = null
     private var isGrepSearching = false
+    private var appliedSearchKey: LiveGrepSearchKey? = null
 
     init {
         scope.launch {
@@ -316,6 +317,10 @@ class LiveGrepDialogViewModel internal constructor(
         matches: List<GrepMatch>,
         isComplete: Boolean,
     ) {
+        val searchKey = request.searchKey()
+        val shouldResetSelection = appliedSearchKey != searchKey
+        appliedSearchKey = searchKey
+
         if (matches.isEmpty()) {
             _state.value = _state.value.copy(
                 rgQuery = request.rgQuery,
@@ -342,7 +347,11 @@ class LiveGrepDialogViewModel internal constructor(
         }
 
         val previousSelection = _state.value.selectedMatch
-        val selectedMatch = previousSelection?.takeIf(matches::contains) ?: matches.first()
+        val selectedMatch = if (shouldResetSelection) {
+            matches.first()
+        } else {
+            previousSelection?.takeIf(matches::contains) ?: matches.first()
+        }
         val selectedMatchIndex = matches.indexOf(selectedMatch)
         _state.value = _state.value.copy(
             rgQuery = request.rgQuery,
@@ -502,7 +511,23 @@ class LiveGrepDialogViewModel internal constructor(
         val options: GrepSearchOptions,
     ) {
         val effectiveRgQuery: String = buildLiveGrepQuery(rgQuery, queryMode)
+
+        fun searchKey(): LiveGrepSearchKey {
+            return LiveGrepSearchKey(
+                rgQuery = rgQuery,
+                fzfQuery = fzfQuery,
+                queryMode = queryMode,
+                options = options,
+            )
+        }
     }
+
+    private data class LiveGrepSearchKey(
+        val rgQuery: String,
+        val fzfQuery: String,
+        val queryMode: LiveGrepQueryMode,
+        val options: GrepSearchOptions,
+    )
 
     private companion object {
         const val SEARCH_DEBOUNCE_MS = 180L

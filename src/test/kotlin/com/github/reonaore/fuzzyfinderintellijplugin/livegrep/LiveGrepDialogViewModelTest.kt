@@ -331,6 +331,57 @@ class LiveGrepDialogViewModelTest {
     }
 
     @Test
+    fun keepsSelectedMatchWhenItRemainsInStreamedResults() = runTest {
+        val firstMatch = grepMatch("/tmp/App.kt", "needle")
+        val secondMatch = grepMatch("/tmp/Other.kt", "other needle")
+        val thirdMatch = grepMatch("/tmp/More.kt", "more needle")
+        val continueStream = CompletableDeferred<Unit>()
+        val viewModel = LiveGrepDialogViewModel(
+            backend = TestLiveGrepSearchBackend(
+                streamGrep = { query, _ ->
+                    flow {
+                        emit(
+                            GrepSearchUpdate(
+                                totalMatches = 2,
+                                query = query,
+                                matches = listOf(firstMatch, secondMatch),
+                                isComplete = false,
+                            ),
+                        )
+                        continueStream.await()
+                        emit(
+                            GrepSearchUpdate(
+                                totalMatches = 3,
+                                query = query,
+                                matches = listOf(firstMatch, secondMatch, thirdMatch),
+                                isComplete = true,
+                            ),
+                        )
+                    }
+                },
+            ),
+            scope = backgroundScope,
+            initialOptions = GrepSearchOptions(),
+            loadPreview = { path -> PreviewContent(path.toString(), null) },
+        )
+
+        viewModel.onUpdateRgQuery("needle")
+        advancePastSearchDebounce()
+        assertEquals(listOf(firstMatch, secondMatch), viewModel.state.value.matches)
+
+        viewModel.onSelectNextMatch()
+        assertEquals(secondMatch, viewModel.state.value.selectedMatch)
+
+        continueStream.complete(Unit)
+        runCurrent()
+        advanceUntilIdle()
+
+        assertEquals(listOf(firstMatch, secondMatch, thirdMatch), viewModel.state.value.matches)
+        assertEquals(1, viewModel.state.value.selectedMatchIndex)
+        assertEquals(secondMatch, viewModel.state.value.selectedMatch)
+    }
+
+    @Test
     fun marksStateAsErrorWhenGrepFails() = runTest {
         val notifications = mutableListOf<String>()
         val viewModel = LiveGrepDialogViewModel(
@@ -440,7 +491,7 @@ class LiveGrepDialogViewModelTest {
     fun resetsSelectionToFirstFilteredMatchWhenFzfQueryChanges() = runTest {
         val sourceMatches = listOf(
             grepMatch("/tmp/App.kt", "needle"),
-            grepMatch("/tmp/Other.kt", "other"),
+            grepMatch("/tmp/Other.kt", "other needle"),
         )
         val viewModel = LiveGrepDialogViewModel(
             backend = TestLiveGrepSearchBackend(
@@ -472,8 +523,82 @@ class LiveGrepDialogViewModelTest {
         advancePastSearchDebounce()
 
         assertEquals("needle", viewModel.state.value.fzfQuery)
-        assertEquals(listOf(sourceMatches[0]), viewModel.state.value.matches)
+        assertEquals(sourceMatches, viewModel.state.value.matches)
 
+        assertEquals(0, viewModel.state.value.selectedMatchIndex)
+        assertEquals(sourceMatches[0], viewModel.state.value.selectedMatch)
+    }
+
+    @Test
+    fun resetsSelectionToFirstMatchWhenGrepQueryChanges() = runTest {
+        val sourceMatches = listOf(
+            grepMatch("/tmp/App.kt", "needle"),
+            grepMatch("/tmp/Other.kt", "other needle"),
+        )
+        val viewModel = LiveGrepDialogViewModel(
+            backend = TestLiveGrepSearchBackend(
+                runGrep = { query, _ ->
+                    GrepSearchResult(
+                        totalMatches = sourceMatches.size,
+                        query = query,
+                        matches = sourceMatches,
+                    )
+                },
+            ),
+            scope = backgroundScope,
+            initialOptions = GrepSearchOptions(),
+            loadPreview = { path -> PreviewContent(path.toString(), null) },
+        )
+
+        viewModel.onUpdateRgQuery("needle")
+        advancePastSearchDebounce()
+        advanceUntilIdle()
+        viewModel.onSelectNextMatch()
+        assertEquals(sourceMatches[1], viewModel.state.value.selectedMatch)
+
+        viewModel.onUpdateRgQuery("needle updated")
+        advancePastSearchDebounce()
+        advanceUntilIdle()
+
+        assertEquals("needle updated", viewModel.state.value.rgQuery)
+        assertEquals(sourceMatches, viewModel.state.value.matches)
+        assertEquals(0, viewModel.state.value.selectedMatchIndex)
+        assertEquals(sourceMatches[0], viewModel.state.value.selectedMatch)
+    }
+
+    @Test
+    fun resetsSelectionToFirstMatchWhenGrepOptionsChange() = runTest {
+        val sourceMatches = listOf(
+            grepMatch("/tmp/App.kt", "needle"),
+            grepMatch("/tmp/Other.kt", "other needle"),
+        )
+        val viewModel = LiveGrepDialogViewModel(
+            backend = TestLiveGrepSearchBackend(
+                runGrep = { query, _ ->
+                    GrepSearchResult(
+                        totalMatches = sourceMatches.size,
+                        query = query,
+                        matches = sourceMatches,
+                    )
+                },
+            ),
+            scope = backgroundScope,
+            initialOptions = GrepSearchOptions(),
+            loadPreview = { path -> PreviewContent(path.toString(), null) },
+        )
+
+        viewModel.onUpdateRgQuery("needle")
+        advancePastSearchDebounce()
+        advanceUntilIdle()
+        viewModel.onSelectNextMatch()
+        assertEquals(sourceMatches[1], viewModel.state.value.selectedMatch)
+
+        viewModel.onUpdateOptions(GrepSearchOptions(includeHidden = false))
+        runCurrent()
+        advanceUntilIdle()
+
+        assertEquals(GrepSearchOptions(includeHidden = false), viewModel.state.value.options)
+        assertEquals(sourceMatches, viewModel.state.value.matches)
         assertEquals(0, viewModel.state.value.selectedMatchIndex)
         assertEquals(sourceMatches[0], viewModel.state.value.selectedMatch)
     }
