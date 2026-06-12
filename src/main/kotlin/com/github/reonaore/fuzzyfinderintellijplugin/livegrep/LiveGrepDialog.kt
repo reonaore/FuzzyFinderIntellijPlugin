@@ -234,6 +234,7 @@ class LiveGrepDialog(
             previewState.content,
             scrollToLine = previewState.scrollToLine,
             highlightRanges = previewState.highlightRanges,
+            lineHighlights = previewState.lineHighlights,
         )
     }
 

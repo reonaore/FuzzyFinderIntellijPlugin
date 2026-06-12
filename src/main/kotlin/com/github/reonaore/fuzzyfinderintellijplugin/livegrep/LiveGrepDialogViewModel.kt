@@ -3,9 +3,11 @@ package com.github.reonaore.fuzzyfinderintellijplugin.livegrep
 import com.github.reonaore.fuzzyfinderintellijplugin.MyBundle
 import com.github.reonaore.fuzzyfinderintellijplugin.services.FuzzyFinderException
 import com.github.reonaore.fuzzyfinderintellijplugin.services.GrepMatch
-import com.github.reonaore.fuzzyfinderintellijplugin.services.PreviewHighlightRange
 import com.github.reonaore.fuzzyfinderintellijplugin.services.GrepSearchOptions
 import com.github.reonaore.fuzzyfinderintellijplugin.services.GrepSearchUpdate
+import com.github.reonaore.fuzzyfinderintellijplugin.services.PreviewHighlightRange
+import com.github.reonaore.fuzzyfinderintellijplugin.services.PreviewLineHighlight
+import com.github.reonaore.fuzzyfinderintellijplugin.services.PreviewLineHighlightKind
 import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.FuzzyFinderPreviewLoader
 import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.PreviewContent
 import kotlinx.coroutines.CancellationException
@@ -76,11 +78,13 @@ sealed interface LiveGrepPreviewState {
     val content: PreviewContent
     val scrollToLine: Int?
     val highlightRanges: List<PreviewHighlightRange>
+    val lineHighlights: List<PreviewLineHighlight>
 
     data object Empty : LiveGrepPreviewState {
         override val content: PreviewContent = PreviewContent.empty
         override val scrollToLine: Int? = null
         override val highlightRanges: List<PreviewHighlightRange> = emptyList()
+        override val lineHighlights: List<PreviewLineHighlight> = emptyList()
     }
 
     data class Loading(
@@ -91,6 +95,7 @@ sealed interface LiveGrepPreviewState {
         ),
         override val scrollToLine: Int? = match.line,
         override val highlightRanges: List<PreviewHighlightRange> = emptyList(),
+        override val lineHighlights: List<PreviewLineHighlight> = emptyList(),
     ) : LiveGrepPreviewState
 
     data class Ready(
@@ -98,6 +103,7 @@ sealed interface LiveGrepPreviewState {
         override val content: PreviewContent,
         override val scrollToLine: Int,
         override val highlightRanges: List<PreviewHighlightRange>,
+        override val lineHighlights: List<PreviewLineHighlight>,
     ) : LiveGrepPreviewState
 }
 
@@ -388,7 +394,10 @@ class LiveGrepDialogViewModel internal constructor(
     ): LiveGrepPreviewState {
         val currentPreview = _state.value.preview
         return if (currentPreview is LiveGrepPreviewState.Ready && currentPreview.match == selectedMatch) {
-            currentPreview.copy(highlightRanges = previewHighlightsFor(selectedMatch, visibleMatches))
+            currentPreview.copy(
+                highlightRanges = previewHighlightsFor(selectedMatch, visibleMatches),
+                lineHighlights = previewLineHighlightsFor(selectedMatch, visibleMatches),
+            )
         } else {
             currentPreview
         }
@@ -487,6 +496,7 @@ class LiveGrepDialogViewModel internal constructor(
                     content = content,
                     scrollToLine = match.line,
                     highlightRanges = previewHighlightsFor(match, _state.value.matches),
+                    lineHighlights = previewLineHighlightsFor(match, _state.value.matches),
                 ),
             )
         }
@@ -501,6 +511,24 @@ class LiveGrepDialogViewModel internal constructor(
                     PreviewHighlightRange(line = match.line, range = range)
                 }
             }
+            .toList()
+    }
+
+    private fun previewLineHighlightsFor(selected: GrepMatch, visibleMatches: List<GrepMatch>): List<PreviewLineHighlight> {
+        return visibleMatches
+            .asSequence()
+            .filter { it.path == selected.path }
+            .map { match ->
+                PreviewLineHighlight(
+                    line = match.line,
+                    kind = if (match.line == selected.line) {
+                        PreviewLineHighlightKind.SELECTED
+                    } else {
+                        PreviewLineHighlightKind.MATCH
+                    },
+                )
+            }
+            .distinctBy(PreviewLineHighlight::line)
             .toList()
     }
 

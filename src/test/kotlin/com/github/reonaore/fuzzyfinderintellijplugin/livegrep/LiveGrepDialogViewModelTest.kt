@@ -6,6 +6,8 @@ import com.github.reonaore.fuzzyfinderintellijplugin.services.PreviewHighlightRa
 import com.github.reonaore.fuzzyfinderintellijplugin.services.GrepSearchOptions
 import com.github.reonaore.fuzzyfinderintellijplugin.services.GrepSearchResult
 import com.github.reonaore.fuzzyfinderintellijplugin.services.GrepSearchUpdate
+import com.github.reonaore.fuzzyfinderintellijplugin.services.PreviewLineHighlight
+import com.github.reonaore.fuzzyfinderintellijplugin.services.PreviewLineHighlightKind
 import com.github.reonaore.fuzzyfinderintellijplugin.services.TextRange
 import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.PreviewContent
 import kotlinx.coroutines.CompletableDeferred
@@ -677,6 +679,13 @@ class LiveGrepDialogViewModelTest {
                 PreviewHighlightRange(line = 8, range = TextRange(7, 10)),
             ),
             preview.highlightRanges,
+        )
+        assertEquals(
+            listOf(
+                PreviewLineHighlight(line = 3, kind = PreviewLineHighlightKind.SELECTED),
+                PreviewLineHighlight(line = 8, kind = PreviewLineHighlightKind.MATCH),
+            ),
+            preview.lineHighlights,
         )
     }
 
