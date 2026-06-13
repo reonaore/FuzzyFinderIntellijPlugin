@@ -257,14 +257,17 @@ class FuzzyFinderDialogViewModelTest {
     @Test
     @OptIn(ExperimentalCoroutinesApi::class)
     fun resetsSelectionToFirstCandidateWhenSearchResultsChange() = runTest {
+        val firstCandidate = Path.of("/tmp/first-a.txt")
+        val retainedCandidate = Path.of("/tmp/first-b.txt")
+        val newFirstCandidate = Path.of("/tmp/second-a.txt")
         val viewModel = FuzzyFinderDialogViewModel(
             backend = TestFuzzyFinderSearchBackend(
                 streamCandidates = {
                     flow {
                         emit(
                             CandidateSearchUpdate(
-                                totalCandidates = 2,
-                                candidates = listOf(Path.of("/tmp/first-a.txt"), Path.of("/tmp/first-b.txt")),
+                                totalCandidates = 3,
+                                candidates = listOf(firstCandidate, retainedCandidate, newFirstCandidate),
                                 isComplete = true,
                             ),
                         )
@@ -272,9 +275,9 @@ class FuzzyFinderDialogViewModelTest {
                 },
                 filterCandidatesAction = { query, _ ->
                     if (query == "first") {
-                        listOf(Path.of("/tmp/first-a.txt"), Path.of("/tmp/first-b.txt"))
+                        listOf(firstCandidate, retainedCandidate)
                     } else {
-                        listOf(Path.of("/tmp/second-a.txt"), Path.of("/tmp/second-b.txt"))
+                        listOf(newFirstCandidate, retainedCandidate)
                     }
                 },
             ),
@@ -288,11 +291,12 @@ class FuzzyFinderDialogViewModelTest {
         advanceUntilIdle()
         assertEquals("first", viewModel.state.value.query)
         assertFalse(viewModel.state.value.isSearching)
-        assertEquals(Path.of("/tmp/first-a.txt"), viewModel.state.value.selectedPath)
+        assertEquals(firstCandidate, viewModel.state.value.selectedPath)
 
         viewModel.onSelectNextCandidate()
         advanceUntilIdle()
         assertEquals(1, viewModel.state.value.selectedIndex)
+        assertEquals(retainedCandidate, viewModel.state.value.selectedPath)
 
         viewModel.onUpdateQuery("second")
         advanceTimeBy(SEARCH_DEBOUNCE_TIMEOUT_MS)
@@ -301,8 +305,8 @@ class FuzzyFinderDialogViewModelTest {
         assertEquals("second", viewModel.state.value.query)
         assertFalse(viewModel.state.value.isSearching)
         assertEquals(0, viewModel.state.value.selectedIndex)
-        assertEquals(Path.of("/tmp/second-a.txt"), viewModel.state.value.selectedPath)
-        assertEquals(Path.of("/tmp/second-a.txt"), (viewModel.state.value.preview as FuzzyFinderPreviewState.Ready).path)
+        assertEquals(newFirstCandidate, viewModel.state.value.selectedPath)
+        assertEquals(newFirstCandidate, (viewModel.state.value.preview as FuzzyFinderPreviewState.Ready).path)
     }
 
     @Test

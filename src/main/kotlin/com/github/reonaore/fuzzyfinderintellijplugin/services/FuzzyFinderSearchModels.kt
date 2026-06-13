@@ -47,6 +47,16 @@ data class PreviewHighlightRange(
     val range: TextRange,
 )
 
+data class PreviewLineHighlight(
+    val line: Int,
+    val kind: PreviewLineHighlightKind,
+)
+
+enum class PreviewLineHighlightKind {
+    MATCH,
+    SELECTED,
+}
+
 data class FdSearchOptions(
     val entryType: FdEntryType = FdEntryType.FILES,
     val includeHidden: Boolean = true,

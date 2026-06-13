@@ -98,6 +98,7 @@ class FuzzyFinderDialogViewModel internal constructor(
     private var cachedCandidates: List<Path> = emptyList()
     private var cachedOptions: FdSearchOptions? = null
     private var isCandidateLoading = false
+    private var appliedSearchKey: FuzzyFinderSearchKey? = null
 
     init {
         scope.launch {
@@ -238,6 +239,10 @@ class FuzzyFinderDialogViewModel internal constructor(
         totalCandidates: Int,
         isComplete: Boolean,
     ) {
+        val searchKey = FuzzyFinderSearchKey(query, options)
+        val shouldResetSelection = appliedSearchKey != searchKey
+        appliedSearchKey = searchKey
+
         if (results.isEmpty()) {
             _state.value = _state.value.copy(
                 query = query,
@@ -262,7 +267,11 @@ class FuzzyFinderDialogViewModel internal constructor(
         }
 
         val previousSelection = _state.value.selectedPath
-        val selectedPath = previousSelection?.takeIf(results::contains) ?: results.first()
+        val selectedPath = if (shouldResetSelection) {
+            results.first()
+        } else {
+            previousSelection?.takeIf(results::contains) ?: results.first()
+        }
         val selectedIndex = results.indexOf(selectedPath)
         _state.value = _state.value.copy(
             query = query,
@@ -344,6 +353,11 @@ class FuzzyFinderDialogViewModel internal constructor(
     private companion object {
         const val SEARCH_DEBOUNCE_MS = 180L
     }
+
+    private data class FuzzyFinderSearchKey(
+        val query: String,
+        val options: FdSearchOptions,
+    )
 }
 
 private class FuzzyFinderServiceSearchBackend(

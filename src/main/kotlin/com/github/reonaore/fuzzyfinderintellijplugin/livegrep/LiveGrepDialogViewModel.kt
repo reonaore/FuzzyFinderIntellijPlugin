@@ -3,9 +3,11 @@ package com.github.reonaore.fuzzyfinderintellijplugin.livegrep
 import com.github.reonaore.fuzzyfinderintellijplugin.MyBundle
 import com.github.reonaore.fuzzyfinderintellijplugin.services.FuzzyFinderException
 import com.github.reonaore.fuzzyfinderintellijplugin.services.GrepMatch
-import com.github.reonaore.fuzzyfinderintellijplugin.services.PreviewHighlightRange
 import com.github.reonaore.fuzzyfinderintellijplugin.services.GrepSearchOptions
 import com.github.reonaore.fuzzyfinderintellijplugin.services.GrepSearchUpdate
+import com.github.reonaore.fuzzyfinderintellijplugin.services.PreviewHighlightRange
+import com.github.reonaore.fuzzyfinderintellijplugin.services.PreviewLineHighlight
+import com.github.reonaore.fuzzyfinderintellijplugin.services.PreviewLineHighlightKind
 import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.FuzzyFinderPreviewLoader
 import com.github.reonaore.fuzzyfinderintellijplugin.shared.ui.PreviewContent
 import kotlinx.coroutines.CancellationException
@@ -76,11 +78,13 @@ sealed interface LiveGrepPreviewState {
     val content: PreviewContent
     val scrollToLine: Int?
     val highlightRanges: List<PreviewHighlightRange>
+    val lineHighlights: List<PreviewLineHighlight>
 
     data object Empty : LiveGrepPreviewState {
         override val content: PreviewContent = PreviewContent.empty
         override val scrollToLine: Int? = null
         override val highlightRanges: List<PreviewHighlightRange> = emptyList()
+        override val lineHighlights: List<PreviewLineHighlight> = emptyList()
     }
 
     data class Loading(
@@ -91,6 +95,7 @@ sealed interface LiveGrepPreviewState {
         ),
         override val scrollToLine: Int? = match.line,
         override val highlightRanges: List<PreviewHighlightRange> = emptyList(),
+        override val lineHighlights: List<PreviewLineHighlight> = emptyList(),
     ) : LiveGrepPreviewState
 
     data class Ready(
@@ -98,6 +103,7 @@ sealed interface LiveGrepPreviewState {
         override val content: PreviewContent,
         override val scrollToLine: Int,
         override val highlightRanges: List<PreviewHighlightRange>,
+        override val lineHighlights: List<PreviewLineHighlight>,
     ) : LiveGrepPreviewState
 }
 
@@ -133,6 +139,7 @@ class LiveGrepDialogViewModel internal constructor(
     private var cachedQueryMode: LiveGrepQueryMode? = null
     private var cachedRgOptions: GrepSearchOptions? = null
     private var isGrepSearching = false
+    private var appliedSearchKey: LiveGrepSearchKey? = null
 
     init {
         scope.launch {
@@ -316,6 +323,10 @@ class LiveGrepDialogViewModel internal constructor(
         matches: List<GrepMatch>,
         isComplete: Boolean,
     ) {
+        val searchKey = request.searchKey()
+        val shouldResetSelection = appliedSearchKey != searchKey
+        appliedSearchKey = searchKey
+
         if (matches.isEmpty()) {
             _state.value = _state.value.copy(
                 rgQuery = request.rgQuery,
@@ -342,7 +353,11 @@ class LiveGrepDialogViewModel internal constructor(
         }
 
         val previousSelection = _state.value.selectedMatch
-        val selectedMatch = previousSelection?.takeIf(matches::contains) ?: matches.first()
+        val selectedMatch = if (shouldResetSelection) {
+            matches.first()
+        } else {
+            previousSelection?.takeIf(matches::contains) ?: matches.first()
+        }
         val selectedMatchIndex = matches.indexOf(selectedMatch)
         _state.value = _state.value.copy(
             rgQuery = request.rgQuery,
@@ -379,7 +394,10 @@ class LiveGrepDialogViewModel internal constructor(
     ): LiveGrepPreviewState {
         val currentPreview = _state.value.preview
         return if (currentPreview is LiveGrepPreviewState.Ready && currentPreview.match == selectedMatch) {
-            currentPreview.copy(highlightRanges = previewHighlightsFor(selectedMatch, visibleMatches))
+            currentPreview.copy(
+                highlightRanges = previewHighlightsFor(selectedMatch, visibleMatches),
+                lineHighlights = previewLineHighlightsFor(selectedMatch, visibleMatches),
+            )
         } else {
             currentPreview
         }
@@ -478,6 +496,7 @@ class LiveGrepDialogViewModel internal constructor(
                     content = content,
                     scrollToLine = match.line,
                     highlightRanges = previewHighlightsFor(match, _state.value.matches),
+                    lineHighlights = previewLineHighlightsFor(match, _state.value.matches),
                 ),
             )
         }
@@ -495,6 +514,24 @@ class LiveGrepDialogViewModel internal constructor(
             .toList()
     }
 
+    private fun previewLineHighlightsFor(selected: GrepMatch, visibleMatches: List<GrepMatch>): List<PreviewLineHighlight> {
+        return visibleMatches
+            .asSequence()
+            .filter { it.path == selected.path }
+            .map { match ->
+                PreviewLineHighlight(
+                    line = match.line,
+                    kind = if (match.line == selected.line) {
+                        PreviewLineHighlightKind.SELECTED
+                    } else {
+                        PreviewLineHighlightKind.MATCH
+                    },
+                )
+            }
+            .distinctBy(PreviewLineHighlight::line)
+            .toList()
+    }
+
     private data class LiveGrepSearchRequest(
         val rgQuery: String,
         val fzfQuery: String,
@@ -502,7 +539,23 @@ class LiveGrepDialogViewModel internal constructor(
         val options: GrepSearchOptions,
     ) {
         val effectiveRgQuery: String = buildLiveGrepQuery(rgQuery, queryMode)
+
+        fun searchKey(): LiveGrepSearchKey {
+            return LiveGrepSearchKey(
+                rgQuery = rgQuery,
+                fzfQuery = fzfQuery,
+                queryMode = queryMode,
+                options = options,
+            )
+        }
     }
+
+    private data class LiveGrepSearchKey(
+        val rgQuery: String,
+        val fzfQuery: String,
+        val queryMode: LiveGrepQueryMode,
+        val options: GrepSearchOptions,
+    )
 
     private companion object {
         const val SEARCH_DEBOUNCE_MS = 180L

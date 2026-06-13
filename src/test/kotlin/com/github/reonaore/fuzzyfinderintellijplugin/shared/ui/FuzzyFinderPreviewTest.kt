@@ -1,6 +1,8 @@
 package com.github.reonaore.fuzzyfinderintellijplugin.shared.ui
 
 import com.github.reonaore.fuzzyfinderintellijplugin.services.PreviewHighlightRange
+import com.github.reonaore.fuzzyfinderintellijplugin.services.PreviewLineHighlight
+import com.github.reonaore.fuzzyfinderintellijplugin.services.PreviewLineHighlightKind
 import com.github.reonaore.fuzzyfinderintellijplugin.services.TextRange
 import junit.framework.TestCase.assertEquals
 import org.junit.Test
@@ -43,6 +45,26 @@ class FuzzyFinderPreviewTest {
         )
 
         assertEquals(listOf(TextRange(0, 6)), offsets)
+    }
+
+    @Test
+    fun calculatesPreviewLineHighlightIndexesAndIgnoresOutOfRangeLines() {
+        val indexes = previewLineHighlightIndexes(
+            lineCount = 3,
+            lineHighlights = listOf(
+                PreviewLineHighlight(line = 1, kind = PreviewLineHighlightKind.MATCH),
+                PreviewLineHighlight(line = 3, kind = PreviewLineHighlightKind.SELECTED),
+                PreviewLineHighlight(line = 4, kind = PreviewLineHighlightKind.MATCH),
+            ),
+        )
+
+        assertEquals(
+            listOf(
+                PreviewLineHighlightIndex(lineIndex = 0, kind = PreviewLineHighlightKind.MATCH),
+                PreviewLineHighlightIndex(lineIndex = 2, kind = PreviewLineHighlightKind.SELECTED),
+            ),
+            indexes,
+        )
     }
 
     @Test
