@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-06-14
+
 ### Changed
 
 - File Finder and Live Grep now reset the selected result to the first item when search conditions change.
@@ -122,7 +124,8 @@
 - Preview loading now runs off the EDT and ignores stale selection updates
 - User-visible strings are centralized in the resource bundle
 
-[Unreleased]: https://github.com/reonaore/FuzzyFinderIntellijPlugin/compare/0.4.0...HEAD
+[Unreleased]: https://github.com/reonaore/FuzzyFinderIntellijPlugin/compare/0.5.0...HEAD
+[0.5.0]: https://github.com/reonaore/FuzzyFinderIntellijPlugin/compare/0.4.0...0.5.0
 [0.4.0]: https://github.com/reonaore/FuzzyFinderIntellijPlugin/compare/0.3.3...0.4.0
 [0.3.3]: https://github.com/reonaore/FuzzyFinderIntellijPlugin/compare/0.3.2...0.3.3
 [0.3.2]: https://github.com/reonaore/FuzzyFinderIntellijPlugin/compare/0.3.1...0.3.2
