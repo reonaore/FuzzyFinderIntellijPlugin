@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+### Changed
+
+- File Finder and Live Grep now reset the selected result to the first item when search conditions change.
+- Live Grep previews now highlight matching lines with theme-aware colors and a selected-line accent.
+- Build tooling now uses Kotlin Gradle plugin 2.4.0 and Codecov Action v7.
+
 ## [0.4.0] - 2026-05-23
 
 ### Added
