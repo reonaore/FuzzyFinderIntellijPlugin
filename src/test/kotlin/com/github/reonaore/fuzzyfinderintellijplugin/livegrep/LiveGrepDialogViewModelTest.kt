@@ -333,6 +333,40 @@ class LiveGrepDialogViewModelTest {
     }
 
     @Test
+    fun keepsAutomaticallySelectedMatchAtFirstIndexDuringStreamedUpdates() = runTest {
+        val initialFirst = grepMatch("/tmp/Initial.kt", "needle")
+        val second = grepMatch("/tmp/Second.kt", "needle")
+        val newFirst = grepMatch("/tmp/NewFirst.kt", "needle")
+        val continueStream = CompletableDeferred<Unit>()
+        val viewModel = LiveGrepDialogViewModel(
+            backend = TestLiveGrepSearchBackend(
+                streamGrep = { query, _ ->
+                    flow {
+                        emit(GrepSearchUpdate(2, query, listOf(initialFirst, second), false))
+                        continueStream.await()
+                        emit(GrepSearchUpdate(3, query, listOf(newFirst, initialFirst, second), true))
+                    }
+                },
+            ),
+            scope = backgroundScope,
+            initialOptions = GrepSearchOptions(),
+            loadPreview = { path -> PreviewContent(path.toString(), null) },
+        )
+
+        viewModel.onUpdateRgQuery("needle")
+        advancePastSearchDebounce()
+        assertEquals(initialFirst, viewModel.state.value.selectedMatch)
+
+        continueStream.complete(Unit)
+        runCurrent()
+        advanceUntilIdle()
+
+        assertEquals(0, viewModel.state.value.selectedMatchIndex)
+        assertEquals(newFirst, viewModel.state.value.selectedMatch)
+        assertEquals(newFirst, (viewModel.state.value.preview as LiveGrepPreviewState.Ready).match)
+    }
+
+    @Test
     fun keepsSelectedMatchWhenItRemainsInStreamedResults() = runTest {
         val firstMatch = grepMatch("/tmp/App.kt", "needle")
         val secondMatch = grepMatch("/tmp/Other.kt", "other needle")
@@ -355,7 +389,7 @@ class LiveGrepDialogViewModelTest {
                             GrepSearchUpdate(
                                 totalMatches = 3,
                                 query = query,
-                                matches = listOf(firstMatch, secondMatch, thirdMatch),
+                                matches = listOf(thirdMatch, firstMatch, secondMatch),
                                 isComplete = true,
                             ),
                         )
@@ -371,16 +405,57 @@ class LiveGrepDialogViewModelTest {
         advancePastSearchDebounce()
         assertEquals(listOf(firstMatch, secondMatch), viewModel.state.value.matches)
 
-        viewModel.onSelectNextMatch()
+        viewModel.onSelectMatch(secondMatch)
         assertEquals(secondMatch, viewModel.state.value.selectedMatch)
 
         continueStream.complete(Unit)
         runCurrent()
         advanceUntilIdle()
 
-        assertEquals(listOf(firstMatch, secondMatch, thirdMatch), viewModel.state.value.matches)
-        assertEquals(1, viewModel.state.value.selectedMatchIndex)
+        assertEquals(listOf(thirdMatch, firstMatch, secondMatch), viewModel.state.value.matches)
+        assertEquals(2, viewModel.state.value.selectedMatchIndex)
         assertEquals(secondMatch, viewModel.state.value.selectedMatch)
+    }
+
+    @Test
+    fun returnsToAutomaticSelectionWhenSelectedMatchDisappears() = runTest {
+        val first = grepMatch("/tmp/First.kt", "needle")
+        val selected = grepMatch("/tmp/Selected.kt", "needle")
+        val fallback = grepMatch("/tmp/Fallback.kt", "needle")
+        val newFirst = grepMatch("/tmp/NewFirst.kt", "needle")
+        val removeSelection = CompletableDeferred<Unit>()
+        val continueStream = CompletableDeferred<Unit>()
+        val viewModel = LiveGrepDialogViewModel(
+            backend = TestLiveGrepSearchBackend(
+                streamGrep = { query, _ ->
+                    flow {
+                        emit(GrepSearchUpdate(2, query, listOf(first, selected), false))
+                        removeSelection.await()
+                        emit(GrepSearchUpdate(2, query, listOf(fallback, first), false))
+                        continueStream.await()
+                        emit(GrepSearchUpdate(3, query, listOf(newFirst, fallback, first), true))
+                    }
+                },
+            ),
+            scope = backgroundScope,
+            initialOptions = GrepSearchOptions(),
+            loadPreview = { path -> PreviewContent(path.toString(), null) },
+        )
+
+        viewModel.onUpdateRgQuery("needle")
+        advancePastSearchDebounce()
+        viewModel.onSelectNextMatch()
+        assertEquals(selected, viewModel.state.value.selectedMatch)
+
+        removeSelection.complete(Unit)
+        runCurrent()
+        assertEquals(fallback, viewModel.state.value.selectedMatch)
+
+        continueStream.complete(Unit)
+        runCurrent()
+        advanceUntilIdle()
+        assertEquals(0, viewModel.state.value.selectedMatchIndex)
+        assertEquals(newFirst, viewModel.state.value.selectedMatch)
     }
 
     @Test
@@ -441,7 +516,7 @@ class LiveGrepDialogViewModelTest {
     }
 
     @Test
-    fun clampsMatchSelectionWithinVisibleMatches() = runTest {
+    fun wrapsNextMatchSelectionAtEndAndClampsPreviousAtStart() = runTest {
         val firstMatch = grepMatch("/tmp/App.kt", "needle")
         val secondMatch = grepMatch("/tmp/Other.kt", "other")
         val viewModel = viewModelWithMatches(firstMatch, secondMatch)
@@ -460,12 +535,12 @@ class LiveGrepDialogViewModelTest {
         assertEquals(secondMatch, viewModel.state.value.selectedMatch)
 
         viewModel.onSelectNextMatch()
-        assertEquals(1, viewModel.state.value.selectedMatchIndex)
-        assertEquals(secondMatch, viewModel.state.value.selectedMatch)
+        assertEquals(0, viewModel.state.value.selectedMatchIndex)
+        assertEquals(firstMatch, viewModel.state.value.selectedMatch)
     }
 
     @Test
-    fun doesNotReloadPreviewWhenClampedSelectionIsUnchanged() = runTest {
+    fun doesNotReloadPreviewWhenWrappedSelectionIsUnchanged() = runTest {
         val match = grepMatch("/tmp/App.kt", "needle")
         val loadCount = AtomicInteger()
         val viewModel = viewModelWithMatches(

@@ -99,6 +99,7 @@ class FuzzyFinderDialogViewModel internal constructor(
     private var cachedOptions: FdSearchOptions? = null
     private var isCandidateLoading = false
     private var appliedSearchKey: FuzzyFinderSearchKey? = null
+    private var isSelectionUserControlled = false
 
     init {
         scope.launch {
@@ -126,14 +127,29 @@ class FuzzyFinderDialogViewModel internal constructor(
     }
 
     fun onSelectCandidate(index: Int) {
+        if (index in _state.value.paths.indices) {
+            isSelectionUserControlled = true
+        }
         selectCandidate(index)
     }
 
     fun onSelectNextCandidate() {
-        selectCandidate(_state.value.selectedIndex + 1)
+        val currentState = _state.value
+        if (currentState.paths.isNotEmpty()) {
+            isSelectionUserControlled = true
+        }
+        val nextIndex = if (currentState.selectedIndex >= currentState.paths.lastIndex) {
+            0
+        } else {
+            currentState.selectedIndex + 1
+        }
+        selectCandidate(nextIndex)
     }
 
     fun onSelectPreviousCandidate() {
+        if (_state.value.paths.isNotEmpty()) {
+            isSelectionUserControlled = true
+        }
         val currentIndex = _state.value.selectedIndex.takeIf { it >= 0 } ?: 0
         selectCandidate(currentIndex - 1)
     }
@@ -211,6 +227,7 @@ class FuzzyFinderDialogViewModel internal constructor(
 
     private fun applyError(query: String, options: FdSearchOptions, error: Throwable) {
         clearPreview()
+        isSelectionUserControlled = false
         _state.value = _state.value.copy(
             query = query,
             options = options,
@@ -244,6 +261,7 @@ class FuzzyFinderDialogViewModel internal constructor(
         appliedSearchKey = searchKey
 
         if (results.isEmpty()) {
+            isSelectionUserControlled = false
             _state.value = _state.value.copy(
                 query = query,
                 options = options,
@@ -267,10 +285,16 @@ class FuzzyFinderDialogViewModel internal constructor(
         }
 
         val previousSelection = _state.value.selectedPath
-        val selectedPath = if (shouldResetSelection) {
-            results.first()
-        } else {
-            previousSelection?.takeIf(results::contains) ?: results.first()
+        val selectedPath = when {
+            shouldResetSelection || !isSelectionUserControlled -> {
+                isSelectionUserControlled = false
+                results.first()
+            }
+            previousSelection != null && results.contains(previousSelection) -> previousSelection
+            else -> {
+                isSelectionUserControlled = false
+                results.first()
+            }
         }
         val selectedIndex = results.indexOf(selectedPath)
         _state.value = _state.value.copy(

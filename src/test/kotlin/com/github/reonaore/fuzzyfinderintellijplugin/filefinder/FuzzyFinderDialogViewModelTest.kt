@@ -223,7 +223,7 @@ class FuzzyFinderDialogViewModelTest {
     }
 
     @Test
-    fun clampsCandidateSelectionWithinResultRange() = runBlocking {
+    fun wrapsNextCandidateSelectionAtEndAndClampsPreviousAtStart() = runBlocking {
         val firstPath = Path.of("/tmp/first.txt")
         val secondPath = Path.of("/tmp/second.txt")
         val viewModel = viewModelWithResults(firstPath, secondPath)
@@ -250,8 +250,8 @@ class FuzzyFinderDialogViewModelTest {
         assertEquals(secondPath, (viewModel.state.value.preview as FuzzyFinderPreviewState.Ready).path)
 
         viewModel.onSelectNextCandidate()
-        assertEquals(1, viewModel.state.value.selectedIndex)
-        assertEquals(secondPath, viewModel.state.value.selectedPath)
+        assertEquals(0, viewModel.state.value.selectedIndex)
+        assertEquals(firstPath, viewModel.state.value.selectedPath)
     }
 
     @Test
@@ -310,6 +310,46 @@ class FuzzyFinderDialogViewModelTest {
     }
 
     @Test
+    fun keepsAutomaticallySelectedCandidateAtFirstIndexDuringStreamedUpdates() = runBlocking {
+        val initialFirst = Path.of("/tmp/initial-first.txt")
+        val second = Path.of("/tmp/second.txt")
+        val newFirst = Path.of("/tmp/new-first.txt")
+        val continueStream = CompletableDeferred<Unit>()
+        val viewModel = FuzzyFinderDialogViewModel(
+            backend = TestFuzzyFinderSearchBackend(
+                streamCandidates = {
+                    flow {
+                        emit(CandidateSearchUpdate(2, listOf(initialFirst, second), false))
+                        continueStream.await()
+                        emit(CandidateSearchUpdate(3, listOf(newFirst, initialFirst, second), true))
+                    }
+                },
+            ),
+            scope = CoroutineScope(Job() + Dispatchers.Default),
+            initialOptions = FdSearchOptions(),
+            loadPreview = { path -> PreviewContent(path.toString(), null) },
+        )
+
+        withTimeout(TEST_TIMEOUT_MS) {
+            waitUntil { viewModel.state.value.paths.size == 2 }
+        }
+        assertEquals(initialFirst, viewModel.state.value.selectedPath)
+
+        continueStream.complete(Unit)
+
+        withTimeout(TEST_TIMEOUT_MS) {
+            waitUntil {
+                val preview = viewModel.state.value.preview
+                !viewModel.state.value.isSearching &&
+                    preview is FuzzyFinderPreviewState.Ready &&
+                    preview.path == newFirst
+            }
+        }
+        assertEquals(0, viewModel.state.value.selectedIndex)
+        assertEquals(newFirst, viewModel.state.value.selectedPath)
+    }
+
+    @Test
     fun keepsSelectedCandidateWhenItRemainsInStreamedResults() = runBlocking {
         val firstPath = Path.of("/tmp/first.txt")
         val secondPath = Path.of("/tmp/second.txt")
@@ -320,7 +360,47 @@ class FuzzyFinderDialogViewModelTest {
                     flow {
                         emit(CandidateSearchUpdate(2, listOf(firstPath, secondPath), false))
                         continueStream.await()
-                        emit(CandidateSearchUpdate(3, listOf(firstPath, secondPath, Path.of("/tmp/third.txt")), true))
+                        emit(CandidateSearchUpdate(3, listOf(Path.of("/tmp/third.txt"), firstPath, secondPath), true))
+                    }
+                },
+            ),
+            scope = CoroutineScope(Job() + Dispatchers.Default),
+            initialOptions = FdSearchOptions(),
+            loadPreview = { path -> PreviewContent(path.toString(), null) },
+        )
+
+        withTimeout(TEST_TIMEOUT_MS) {
+            waitUntil { viewModel.state.value.paths.size == 2 }
+        }
+        viewModel.onSelectCandidate(1)
+        assertEquals(secondPath, viewModel.state.value.selectedPath)
+
+        continueStream.complete(Unit)
+
+        withTimeout(TEST_TIMEOUT_MS) {
+            waitUntil { !viewModel.state.value.isSearching }
+        }
+        assertEquals(secondPath, viewModel.state.value.selectedPath)
+        assertEquals(2, viewModel.state.value.selectedIndex)
+    }
+
+    @Test
+    fun returnsToAutomaticSelectionWhenSelectedCandidateDisappears() = runBlocking {
+        val first = Path.of("/tmp/first.txt")
+        val selected = Path.of("/tmp/selected.txt")
+        val fallback = Path.of("/tmp/fallback.txt")
+        val newFirst = Path.of("/tmp/new-first.txt")
+        val removeSelection = CompletableDeferred<Unit>()
+        val continueStream = CompletableDeferred<Unit>()
+        val viewModel = FuzzyFinderDialogViewModel(
+            backend = TestFuzzyFinderSearchBackend(
+                streamCandidates = {
+                    flow {
+                        emit(CandidateSearchUpdate(2, listOf(first, selected), false))
+                        removeSelection.await()
+                        emit(CandidateSearchUpdate(2, listOf(fallback, first), false))
+                        continueStream.await()
+                        emit(CandidateSearchUpdate(3, listOf(newFirst, fallback, first), true))
                     }
                 },
             ),
@@ -333,15 +413,19 @@ class FuzzyFinderDialogViewModelTest {
             waitUntil { viewModel.state.value.paths.size == 2 }
         }
         viewModel.onSelectNextCandidate()
-        assertEquals(secondPath, viewModel.state.value.selectedPath)
+        assertEquals(selected, viewModel.state.value.selectedPath)
+
+        removeSelection.complete(Unit)
+        withTimeout(TEST_TIMEOUT_MS) {
+            waitUntil { viewModel.state.value.selectedPath == fallback }
+        }
 
         continueStream.complete(Unit)
-
         withTimeout(TEST_TIMEOUT_MS) {
             waitUntil { !viewModel.state.value.isSearching }
         }
-        assertEquals(secondPath, viewModel.state.value.selectedPath)
-        assertEquals(1, viewModel.state.value.selectedIndex)
+        assertEquals(0, viewModel.state.value.selectedIndex)
+        assertEquals(newFirst, viewModel.state.value.selectedPath)
     }
 
     @Test

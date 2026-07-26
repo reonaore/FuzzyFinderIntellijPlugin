@@ -140,6 +140,7 @@ class LiveGrepDialogViewModel internal constructor(
     private var cachedRgOptions: GrepSearchOptions? = null
     private var isGrepSearching = false
     private var appliedSearchKey: LiveGrepSearchKey? = null
+    private var isSelectionUserControlled = false
 
     init {
         scope.launch {
@@ -196,14 +197,29 @@ class LiveGrepDialogViewModel internal constructor(
     }
 
     fun onSelectMatch(match: GrepMatch?) {
+        if (match != null && _state.value.matches.contains(match)) {
+            isSelectionUserControlled = true
+        }
         selectMatch(match)
     }
 
     fun onSelectNextMatch() {
-        selectMatchByIndex(_state.value.selectedMatchIndex + 1)
+        val currentState = _state.value
+        if (currentState.matches.isNotEmpty()) {
+            isSelectionUserControlled = true
+        }
+        val nextIndex = if (currentState.selectedMatchIndex >= currentState.matches.lastIndex) {
+            0
+        } else {
+            currentState.selectedMatchIndex + 1
+        }
+        selectMatchByIndex(nextIndex)
     }
 
     fun onSelectPreviousMatch() {
+        if (_state.value.matches.isNotEmpty()) {
+            isSelectionUserControlled = true
+        }
         val currentIndex = _state.value.selectedMatchIndex.takeIf { it >= 0 } ?: 0
         selectMatchByIndex(currentIndex - 1)
     }
@@ -213,6 +229,7 @@ class LiveGrepDialogViewModel internal constructor(
             cachedRgMatches = emptyList()
             cachedRgTotalMatches = 0
             clearPreview()
+            isSelectionUserControlled = false
             _state.value = LiveGrepDialogState(
                 rgQuery = request.rgQuery,
                 fzfQuery = request.fzfQuery,
@@ -252,6 +269,7 @@ class LiveGrepDialogViewModel internal constructor(
     private suspend fun searchWithFzf(request: LiveGrepSearchRequest) {
         if (request.effectiveRgQuery.isBlank()) {
             clearPreview()
+            isSelectionUserControlled = false
             _state.value = LiveGrepDialogState(
                 rgQuery = request.rgQuery,
                 fzfQuery = request.fzfQuery,
@@ -328,6 +346,7 @@ class LiveGrepDialogViewModel internal constructor(
         appliedSearchKey = searchKey
 
         if (matches.isEmpty()) {
+            isSelectionUserControlled = false
             _state.value = _state.value.copy(
                 rgQuery = request.rgQuery,
                 fzfQuery = request.fzfQuery,
@@ -353,10 +372,16 @@ class LiveGrepDialogViewModel internal constructor(
         }
 
         val previousSelection = _state.value.selectedMatch
-        val selectedMatch = if (shouldResetSelection) {
-            matches.first()
-        } else {
-            previousSelection?.takeIf(matches::contains) ?: matches.first()
+        val selectedMatch = when {
+            shouldResetSelection || !isSelectionUserControlled -> {
+                isSelectionUserControlled = false
+                matches.first()
+            }
+            previousSelection != null && matches.contains(previousSelection) -> previousSelection
+            else -> {
+                isSelectionUserControlled = false
+                matches.first()
+            }
         }
         val selectedMatchIndex = matches.indexOf(selectedMatch)
         _state.value = _state.value.copy(
@@ -405,6 +430,7 @@ class LiveGrepDialogViewModel internal constructor(
 
     private fun applyError(request: LiveGrepSearchRequest, error: Throwable) {
         clearPreview()
+        isSelectionUserControlled = false
         _state.value = _state.value.copy(
             rgQuery = request.rgQuery,
             fzfQuery = request.fzfQuery,
