@@ -1,5 +1,6 @@
 package com.github.reonaore.fuzzyfinderintellijplugin.livegrep
 
+import com.github.reonaore.fuzzyfinderintellijplugin.services.GrepMatch
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancelAndJoin
@@ -7,6 +8,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import java.nio.file.Path
 
 class LiveGrepPreviewRendererTest {
 
@@ -31,6 +33,40 @@ class LiveGrepPreviewRendererTest {
         renderer.render(LiveGrepPreviewState.Empty)
 
         assertEquals(2, renderCount)
+    }
+
+    @Test
+    fun rerendersPreviousStateWhenDifferentRenderIsCanceled() = runTest {
+        val stateA = LiveGrepPreviewState.Empty
+        val stateB = LiveGrepPreviewState.Loading(
+            GrepMatch(
+                path = Path.of("/tmp/App.kt"),
+                line = 1,
+                column = 1,
+                lineText = "needle",
+                matchRanges = emptyList(),
+            ),
+        )
+        val secondRenderStarted = CompletableDeferred<Unit>()
+        val renderedStates = mutableListOf<LiveGrepPreviewState>()
+        val renderer = LiveGrepPreviewRenderer { state ->
+            renderedStates += state
+            if (state == stateB) {
+                secondRenderStarted.complete(Unit)
+                awaitCancellation()
+            }
+        }
+
+        renderer.render(stateA)
+        val secondRender = launch {
+            renderer.render(stateB)
+        }
+        secondRenderStarted.await()
+        secondRender.cancelAndJoin()
+
+        renderer.render(stateA)
+
+        assertEquals(listOf(stateA, stateB, stateA), renderedStates)
     }
 
     @Test

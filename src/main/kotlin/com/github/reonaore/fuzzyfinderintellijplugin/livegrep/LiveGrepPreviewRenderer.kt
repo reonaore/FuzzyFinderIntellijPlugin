@@ -8,6 +8,7 @@ internal class LiveGrepPreviewRenderer(
     suspend fun render(state: LiveGrepPreviewState) {
         if (renderedState == state) return
 
+        renderedState = null
         showPreview(state)
         renderedState = state
     }
