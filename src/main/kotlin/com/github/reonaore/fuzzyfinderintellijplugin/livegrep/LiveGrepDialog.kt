@@ -66,7 +66,14 @@ class LiveGrepDialog(
     )
     private val preview = FuzzyFinderPreview(project)
     private val dialogScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    private var renderedPreviewState: LiveGrepPreviewState? = null
+    private val previewRenderer = LiveGrepPreviewRenderer { previewState ->
+        preview.show(
+            previewState.content,
+            scrollToLine = previewState.scrollToLine,
+            highlightRanges = previewState.highlightRanges,
+            lineHighlights = previewState.lineHighlights,
+        )
+    }
     private var isRenderingState = false
     private val searchField = LiveGrepSearchOptionsField(MyBundle.message("dialog.grep.search.placeholder"))
     private val fzfSearchField = fuzzyFinderSearchTextField(placeHolderText = MyBundle.message("dialog.grep.fuzzy.placeholder"))
@@ -186,7 +193,7 @@ class LiveGrepDialog(
                 withContext(Dispatchers.EDT) {
                     render(state)
                 }
-                renderPreview(state.preview)
+                previewRenderer.render(state.preview)
             }
         }
     }
@@ -224,18 +231,6 @@ class LiveGrepDialog(
         if (selectedIndex >= 0) {
             resultList.ensureIndexIsVisible(selectedIndex)
         }
-    }
-
-    private suspend fun renderPreview(previewState: LiveGrepPreviewState) {
-        if (renderedPreviewState == previewState) return
-
-        renderedPreviewState = previewState
-        preview.show(
-            previewState.content,
-            scrollToLine = previewState.scrollToLine,
-            highlightRanges = previewState.highlightRanges,
-            lineHighlights = previewState.lineHighlights,
-        )
     }
 
     private fun onCandidateSelected(event: ListSelectionEvent) {
