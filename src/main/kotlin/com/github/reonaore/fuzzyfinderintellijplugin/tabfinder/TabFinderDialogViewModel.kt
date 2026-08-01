@@ -43,6 +43,8 @@ class TabFinderDialogViewModel internal constructor(
     private val openTabs = MutableStateFlow<List<OpenTabCandidate>>(emptyList())
     private val _state = MutableStateFlow(TabFinderDialogState())
     val state: StateFlow<TabFinderDialogState> = _state.asStateFlow()
+    private var appliedQuery: String? = null
+    private var isSelectionUserControlled = false
 
     init {
         scope.launch {
@@ -68,14 +70,29 @@ class TabFinderDialogViewModel internal constructor(
     }
 
     fun onSelectCandidate(index: Int) {
+        if (index in _state.value.candidates.indices) {
+            isSelectionUserControlled = true
+        }
         selectCandidate(index)
     }
 
     fun onSelectNextCandidate() {
-        selectCandidate(_state.value.selectedIndex + 1)
+        val currentState = _state.value
+        if (currentState.candidates.isNotEmpty()) {
+            isSelectionUserControlled = true
+        }
+        val nextIndex = if (currentState.selectedIndex >= currentState.candidates.lastIndex) {
+            0
+        } else {
+            currentState.selectedIndex + 1
+        }
+        selectCandidate(nextIndex)
     }
 
     fun onSelectPreviousCandidate() {
+        if (_state.value.candidates.isNotEmpty()) {
+            isSelectionUserControlled = true
+        }
         val currentIndex = _state.value.selectedIndex.takeIf { it >= 0 } ?: 0
         selectCandidate(currentIndex - 1)
     }
@@ -83,8 +100,25 @@ class TabFinderDialogViewModel internal constructor(
     private suspend fun filter(query: String, openTabs: List<OpenTabCandidate>) {
         try {
             val results = backend.filterCandidates(query, openTabs)
+            val shouldResetSelection = appliedQuery != query
+            appliedQuery = query
             val previousSelection = _state.value.selectedCandidate?.file
-            val selectedCandidate = results.firstOrNull { it.file == previousSelection } ?: results.firstOrNull()
+            val retainedSelection = results.firstOrNull { it.file == previousSelection }
+            val selectedCandidate = when {
+                results.isEmpty() -> {
+                    isSelectionUserControlled = false
+                    null
+                }
+                shouldResetSelection || !isSelectionUserControlled -> {
+                    isSelectionUserControlled = false
+                    results.first()
+                }
+                retainedSelection != null -> retainedSelection
+                else -> {
+                    isSelectionUserControlled = false
+                    results.first()
+                }
+            }
             val selectedIndex = selectedCandidate?.let(results::indexOf) ?: TabFinderDialogState.NO_SELECTION
             val hasOpenTabs = openTabs.isNotEmpty()
             _state.value = TabFinderDialogState(
@@ -104,6 +138,7 @@ class TabFinderDialogViewModel internal constructor(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Throwable) {
+            isSelectionUserControlled = false
             _state.value = _state.value.copy(
                 query = query,
                 candidates = emptyList(),
