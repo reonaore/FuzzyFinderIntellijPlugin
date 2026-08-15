@@ -102,13 +102,30 @@ class TabFinderDialogViewModel internal constructor(
             val results = backend.filterCandidates(query, openTabs)
             val shouldResetSelection = appliedQuery != query
             appliedQuery = query
+            val hasOpenTabs = openTabs.isNotEmpty()
+            val statusText = if (query.isBlank()) {
+                MyBundle.message("dialog.tabs.status.open", openTabs.size)
+            } else {
+                MyBundle.message("dialog.tabs.status.results", results.size, openTabs.size)
+            }
+            if (results.isEmpty()) {
+                isSelectionUserControlled = false
+                _state.value = TabFinderDialogState(
+                    query = query,
+                    candidates = emptyList(),
+                    selectedIndex = TabFinderDialogState.NO_SELECTION,
+                    selectedCandidate = null,
+                    canActivateSelectedTab = false,
+                    hasOpenTabs = hasOpenTabs,
+                    hasError = false,
+                    statusText = statusText,
+                )
+                return
+            }
+
             val previousSelection = _state.value.selectedCandidate?.file
             val retainedSelection = results.firstOrNull { it.file == previousSelection }
             val selectedCandidate = when {
-                results.isEmpty() -> {
-                    isSelectionUserControlled = false
-                    null
-                }
                 shouldResetSelection || !isSelectionUserControlled -> {
                     isSelectionUserControlled = false
                     results.first()
@@ -119,21 +136,15 @@ class TabFinderDialogViewModel internal constructor(
                     results.first()
                 }
             }
-            val selectedIndex = selectedCandidate?.let(results::indexOf) ?: TabFinderDialogState.NO_SELECTION
-            val hasOpenTabs = openTabs.isNotEmpty()
             _state.value = TabFinderDialogState(
                 query = query,
                 candidates = results,
-                selectedIndex = selectedIndex,
+                selectedIndex = results.indexOf(selectedCandidate),
                 selectedCandidate = selectedCandidate,
-                canActivateSelectedTab = selectedCandidate?.file?.isValid == true,
+                canActivateSelectedTab = selectedCandidate.file.isValid,
                 hasOpenTabs = hasOpenTabs,
                 hasError = false,
-                statusText = if (query.isBlank()) {
-                    MyBundle.message("dialog.tabs.status.open", openTabs.size)
-                } else {
-                    MyBundle.message("dialog.tabs.status.results", results.size, openTabs.size)
-                },
+                statusText = statusText,
             )
         } catch (e: CancellationException) {
             throw e
