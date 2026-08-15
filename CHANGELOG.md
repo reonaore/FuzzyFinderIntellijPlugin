@@ -4,6 +4,16 @@
 
 ## [Unreleased]
 
+### Changed
+
+- File Finder, Live Grep, and Open Tab Finder now preserve explicit user selections while their results refresh.
+- Moving to the next result now wraps from the last item to the first.
+
+### Fixed
+
+- Live Grep previews no longer display stale content when rapid selection changes cancel an earlier preview render.
+- Open Tab Finder selection handling no longer triggers constant-condition inspection warnings.
+
 ## [0.5.0] - 2026-06-14
 
 ### Changed
