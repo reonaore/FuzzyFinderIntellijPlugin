@@ -124,18 +124,15 @@ class TabFinderDialogViewModel internal constructor(
             }
 
             val previousSelection = _state.value.selectedCandidate?.file
-            val retainedSelection = results.firstOrNull { it.file == previousSelection }
-            val selectedCandidate = when {
-                shouldResetSelection || !isSelectionUserControlled -> {
-                    isSelectionUserControlled = false
-                    results.first()
+            val shouldKeepUserSelection = !shouldResetSelection && isSelectionUserControlled
+            val selectedCandidate = if (shouldKeepUserSelection) {
+                results.minBy { candidate ->
+                    if (candidate.file == previousSelection) 0 else 1
                 }
-                retainedSelection != null -> retainedSelection
-                else -> {
-                    isSelectionUserControlled = false
-                    results.first()
-                }
+            } else {
+                results.first()
             }
+            isSelectionUserControlled = shouldKeepUserSelection && selectedCandidate.file == previousSelection
             _state.value = TabFinderDialogState(
                 query = query,
                 candidates = results,
