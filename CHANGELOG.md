@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-08-15
+
 ### Changed
 
 - File Finder, Live Grep, and Open Tab Finder now preserve explicit user selections while their results refresh.
@@ -134,7 +136,8 @@
 - Preview loading now runs off the EDT and ignores stale selection updates
 - User-visible strings are centralized in the resource bundle
 
-[Unreleased]: https://github.com/reonaore/FuzzyFinderIntellijPlugin/compare/0.5.0...HEAD
+[Unreleased]: https://github.com/reonaore/FuzzyFinderIntellijPlugin/compare/0.6.0...HEAD
+[0.6.0]: https://github.com/reonaore/FuzzyFinderIntellijPlugin/compare/0.5.0...0.6.0
 [0.5.0]: https://github.com/reonaore/FuzzyFinderIntellijPlugin/compare/0.4.0...0.5.0
 [0.4.0]: https://github.com/reonaore/FuzzyFinderIntellijPlugin/compare/0.3.3...0.4.0
 [0.3.3]: https://github.com/reonaore/FuzzyFinderIntellijPlugin/compare/0.3.2...0.3.3
