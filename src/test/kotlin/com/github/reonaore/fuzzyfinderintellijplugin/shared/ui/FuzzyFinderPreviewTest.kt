@@ -4,7 +4,10 @@ import com.github.reonaore.fuzzyfinderintellijplugin.services.PreviewHighlightRa
 import com.github.reonaore.fuzzyfinderintellijplugin.services.PreviewLineHighlight
 import com.github.reonaore.fuzzyfinderintellijplugin.services.PreviewLineHighlightKind
 import com.github.reonaore.fuzzyfinderintellijplugin.services.TextRange
+import com.intellij.openapi.editor.markup.TextAttributes
+import java.awt.Color
 import junit.framework.TestCase.assertEquals
+import junit.framework.TestCase.assertNotSame
 import org.junit.Test
 
 class FuzzyFinderPreviewTest {
@@ -75,5 +78,46 @@ class FuzzyFinderPreviewTest {
             "@rem\n@rem Copyright\n\nset APP_HOME=%DIRNAME%",
             normalizePreviewTextForEditor(text),
         )
+    }
+
+    @Test
+    fun blendsPreviewHighlightColorIntoEditorBackground() {
+        assertEquals(
+            Color(45, 65, 85),
+            blendColors(
+                background = Color(20, 40, 60),
+                foreground = Color(120, 140, 160),
+                foregroundOpacity = 0.25f,
+            ),
+        )
+    }
+
+    @Test
+    fun usesPreferredEditorSchemeAttributesForSearchMatches() {
+        val preferred = TextAttributes(Color.BLACK, Color.YELLOW, null, null, 0)
+        val fallback = TextAttributes(Color.WHITE, Color.BLUE, null, null, 0)
+
+        val result = previewSearchTextAttributes(preferred, fallback, Color.RED, Color.GREEN)
+
+        assertEquals(preferred, result)
+        assertNotSame(preferred, result)
+    }
+
+    @Test
+    fun usesFallbackEditorSchemeAttributesWhenPreferredAttributesAreUnavailable() {
+        val fallback = TextAttributes(Color.WHITE, Color.BLUE, null, null, 0)
+
+        val result = previewSearchTextAttributes(null, fallback, Color.RED, Color.GREEN)
+
+        assertEquals(fallback, result)
+        assertNotSame(fallback, result)
+    }
+
+    @Test
+    fun fallsBackToSelectionColorsWhenSearchAttributesAreUnavailable() {
+        val result = previewSearchTextAttributes(null, null, Color.WHITE, Color.BLUE)
+
+        assertEquals(Color.WHITE, result.foregroundColor)
+        assertEquals(Color.BLUE, result.backgroundColor)
     }
 }
