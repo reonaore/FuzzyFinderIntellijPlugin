@@ -5,11 +5,17 @@ import com.github.reonaore.fuzzyfinderintellijplugin.services.PreviewHighlightRa
 import com.github.reonaore.fuzzyfinderintellijplugin.services.PreviewLineHighlight
 import com.github.reonaore.fuzzyfinderintellijplugin.services.PreviewLineHighlightKind
 import com.github.reonaore.fuzzyfinderintellijplugin.services.TextRange
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.application.writeAction
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.editor.ScrollType
+import com.intellij.openapi.editor.colors.EditorColors
+import com.intellij.openapi.editor.colors.EditorColorsListener
+import com.intellij.openapi.editor.colors.EditorColorsManager
+import com.intellij.openapi.editor.colors.EditorColorsScheme
 import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.editor.highlighter.EditorHighlighterFactory
 import com.intellij.openapi.editor.markup.HighlighterLayer
@@ -20,7 +26,6 @@ import com.intellij.openapi.editor.markup.TextAttributes
 import com.intellij.openapi.fileTypes.PlainTextFileType
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.text.StringUtil
-import com.intellij.ui.JBColor
 import java.awt.Color
 import java.awt.Font
 import java.awt.Graphics
@@ -31,6 +36,10 @@ class FuzzyFinderPreview(
 ) {
     private val document = EditorFactory.getInstance().createDocument(MyBundle.message("dialog.preview.empty"))
     private val previewHighlighters = mutableListOf<RangeHighlighter>()
+    private var currentPreviewText = document.text
+    private var currentHighlightRanges = emptyList<PreviewHighlightRange>()
+    private var currentLineHighlights = emptyList<PreviewLineHighlight>()
+    private var isDisposed = false
     val editor = (EditorFactory.getInstance().createViewer(document, project) as EditorEx).apply {
         settings.apply {
             isLineNumbersShown = true
@@ -42,6 +51,24 @@ class FuzzyFinderPreview(
             additionalLinesCount = 1
         }
         setCaretEnabled(false)
+    }
+    private val colorSchemeConnection = ApplicationManager.getApplication().messageBus.connect().apply {
+        subscribe(EditorColorsManager.TOPIC, EditorColorsListener {
+            ApplicationManager.getApplication().invokeLater(
+                {
+                    if (!isDisposed) {
+                        refreshPreviewHighlighters()
+                    }
+                },
+                ModalityState.any(),
+            )
+        })
+    }
+    private val selectedLineAccentRenderer = object : LineMarkerRenderer {
+        override fun paint(editor: Editor, graphics: Graphics, rectangle: Rectangle) {
+            graphics.color = selectedLineAccentColor()
+            graphics.fillRect(rectangle.x, rectangle.y, SELECTED_LINE_ACCENT_WIDTH, rectangle.height)
+        }
     }
 
     suspend fun show(
@@ -60,13 +87,14 @@ class FuzzyFinderPreview(
             }
         }
         writeAction {
-            clearPreviewHighlighters()
             editor.highlighter = highlighter
             editor.caretModel.moveToOffset(0)
             editor.scrollingModel.scrollVertically(0)
             document.setText(normalizedText)
-            addPreviewLineHighlighters(lineHighlights)
-            addPreviewHighlighters(normalizedText, highlightRanges)
+            currentPreviewText = normalizedText
+            currentHighlightRanges = highlightRanges
+            currentLineHighlights = lineHighlights
+            refreshPreviewHighlighters()
             scrollToLine?.let { line ->
                 val lineIndex = (line - 1).coerceIn(0, document.lineCount - 1)
                 editor.caretModel.moveToLogicalPosition(com.intellij.openapi.editor.LogicalPosition(lineIndex, 0))
@@ -76,6 +104,8 @@ class FuzzyFinderPreview(
     }
 
     fun dispose() {
+        isDisposed = true
+        colorSchemeConnection.disconnect()
         clearPreviewHighlighters()
         EditorFactory.getInstance().releaseEditor(editor)
     }
@@ -88,19 +118,19 @@ class FuzzyFinderPreview(
                 lineHighlightTextAttributes(highlight.kind),
             )
             if (highlight.kind == PreviewLineHighlightKind.SELECTED) {
-                highlighter.setLineMarkerRenderer(SelectedLineAccentRenderer)
+                highlighter.setLineMarkerRenderer(selectedLineAccentRenderer)
             }
             previewHighlighters += highlighter
         }
     }
 
     private fun addPreviewHighlighters(text: String, highlightRanges: List<PreviewHighlightRange>) {
-        val textAttributes = TextAttributes(
-            SEARCH_MATCH_FOREGROUND,
-            SEARCH_MATCH_BACKGROUND,
-            null,
-            null,
-            Font.PLAIN,
+        val scheme = editor.colorsScheme
+        val textAttributes = previewSearchTextAttributes(
+            scheme.getAttributes(EditorColors.TEXT_SEARCH_RESULT_ATTRIBUTES),
+            scheme.getAttributes(EditorColors.SEARCH_RESULT_ATTRIBUTES),
+            scheme.getColor(EditorColors.SELECTION_FOREGROUND_COLOR),
+            scheme.getColor(EditorColors.SELECTION_BACKGROUND_COLOR),
         )
         previewHighlightTextOffsets(text, highlightRanges).forEach { range ->
             previewHighlighters += editor.markupModel.addRangeHighlighter(
@@ -121,11 +151,34 @@ class FuzzyFinderPreview(
     }
 
     private fun lineHighlightTextAttributes(kind: PreviewLineHighlightKind): TextAttributes {
+        val scheme = editor.colorsScheme
         val background = when (kind) {
-            PreviewLineHighlightKind.MATCH -> RELATED_LINE_BACKGROUND
-            PreviewLineHighlightKind.SELECTED -> SELECTED_LINE_BACKGROUND
+            PreviewLineHighlightKind.MATCH -> relatedLineBackground(scheme)
+            PreviewLineHighlightKind.SELECTED -> scheme.getColor(EditorColors.CARET_ROW_COLOR)
+                ?: scheme.defaultBackground
         }
         return TextAttributes(null, background, null, null, Font.PLAIN)
+    }
+
+    private fun relatedLineBackground(scheme: EditorColorsScheme): Color {
+        val searchBackground = scheme.getAttributes(EditorColors.TEXT_SEARCH_RESULT_ATTRIBUTES)?.backgroundColor
+            ?: scheme.getAttributes(EditorColors.SEARCH_RESULT_ATTRIBUTES)?.backgroundColor
+            ?: scheme.getColor(EditorColors.SELECTION_BACKGROUND_COLOR)
+            ?: scheme.defaultBackground
+        return blendColors(scheme.defaultBackground, searchBackground, RELATED_LINE_HIGHLIGHT_OPACITY)
+    }
+
+    private fun selectedLineAccentColor(): Color {
+        val scheme = editor.colorsScheme
+        return scheme.getColor(EditorColors.SELECTION_BACKGROUND_COLOR)
+            ?: scheme.getColor(EditorColors.CARET_COLOR)
+            ?: scheme.defaultForeground
+    }
+
+    private fun refreshPreviewHighlighters() {
+        clearPreviewHighlighters()
+        addPreviewLineHighlighters(currentLineHighlights)
+        addPreviewHighlighters(currentPreviewText, currentHighlightRanges)
     }
 
     private fun clearPreviewHighlighters() {
@@ -137,37 +190,32 @@ class FuzzyFinderPreview(
         const val WORD_HIGHLIGHT_LAYER = HighlighterLayer.SELECTION - 1
         const val SELECTED_LINE_HIGHLIGHT_LAYER = HighlighterLayer.SELECTION - 3
         const val MATCH_LINE_HIGHLIGHT_LAYER = HighlighterLayer.SELECTION - 4
-        val RELATED_LINE_BACKGROUND = JBColor(
-            Color(0xF6, 0xC8, 0x5F, 46),
-            Color(0xF6, 0xC8, 0x5F, 36),
-        )
-        val SELECTED_LINE_BACKGROUND = JBColor(
-            Color(0x3B, 0x82, 0xF6, 64),
-            Color(0x3B, 0x82, 0xF6, 89),
-        )
-        val SELECTED_LINE_ACCENT = JBColor(
-            Color(0x25, 0x63, 0xEB),
-            Color(0x60, 0xA5, 0xFA),
-        )
-        val SEARCH_MATCH_BACKGROUND = JBColor(
-            Color(0xFF, 0xB1, 0x94),
-            Color(0xFF, 0x8A, 0x65),
-        )
-        val SEARCH_MATCH_FOREGROUND = JBColor(
-            Color(0x4A, 0x1D, 0x12),
-            Color(0x2A, 0x12, 0x0B),
-        )
-    }
-
-    private object SelectedLineAccentRenderer : LineMarkerRenderer {
-        override fun paint(editor: Editor, graphics: Graphics, rectangle: Rectangle) {
-            graphics.color = SELECTED_LINE_ACCENT
-            graphics.fillRect(rectangle.x, rectangle.y, SELECTED_LINE_ACCENT_WIDTH, rectangle.height)
-        }
+        const val RELATED_LINE_HIGHLIGHT_OPACITY = 0.18f
     }
 }
 
 private const val SELECTED_LINE_ACCENT_WIDTH = 3
+
+internal fun previewSearchTextAttributes(
+    preferred: TextAttributes?,
+    fallback: TextAttributes?,
+    selectionForeground: Color?,
+    selectionBackground: Color?,
+): TextAttributes {
+    return preferred?.clone()
+        ?: fallback?.clone()
+        ?: TextAttributes(selectionForeground, selectionBackground, null, null, Font.PLAIN)
+}
+
+internal fun blendColors(background: Color, foreground: Color, foregroundOpacity: Float): Color {
+    val opacity = foregroundOpacity.coerceIn(0f, 1f)
+    val backgroundOpacity = 1f - opacity
+    return Color(
+        (background.red * backgroundOpacity + foreground.red * opacity).toInt(),
+        (background.green * backgroundOpacity + foreground.green * opacity).toInt(),
+        (background.blue * backgroundOpacity + foreground.blue * opacity).toInt(),
+    )
+}
 
 internal fun normalizePreviewTextForEditor(text: String): String {
     return StringUtil.convertLineSeparators(text)
