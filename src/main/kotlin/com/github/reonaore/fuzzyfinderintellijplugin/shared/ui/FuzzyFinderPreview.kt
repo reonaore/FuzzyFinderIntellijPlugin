@@ -9,7 +9,6 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.application.writeAction
-import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.editor.ScrollType
 import com.intellij.openapi.editor.colors.EditorColors
@@ -28,8 +27,6 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.text.StringUtil
 import java.awt.Color
 import java.awt.Font
-import java.awt.Graphics
-import java.awt.Rectangle
 
 class FuzzyFinderPreview(
     private val project: Project,
@@ -64,11 +61,9 @@ class FuzzyFinderPreview(
             )
         })
     }
-    private val selectedLineAccentRenderer = object : LineMarkerRenderer {
-        override fun paint(editor: Editor, graphics: Graphics, rectangle: Rectangle) {
-            graphics.color = selectedLineAccentColor()
-            graphics.fillRect(rectangle.x, rectangle.y, SELECTED_LINE_ACCENT_WIDTH, rectangle.height)
-        }
+    private val selectedLineAccentRenderer = LineMarkerRenderer { _, graphics, rectangle ->
+        graphics.color = selectedLineAccentColor()
+        graphics.fillRect(rectangle.x, rectangle.y, SELECTED_LINE_ACCENT_WIDTH, rectangle.height)
     }
 
     suspend fun show(
