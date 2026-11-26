@@ -2,7 +2,7 @@
 # libraries
 junit = "4.13.2"
 opentest4j = "1.3.0"
-kotlinxCoroutines = "1.10.2"
+kotlinxCoroutines = "1.11.0"
 kotlinxSerializationJson = "1.13.0"
 
 # plugins
